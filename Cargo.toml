@@ -1,0 +1,15 @@
+[package]
+name = "somnuscape"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.72"
+async-openai = "0.12.2"
+dotenvy = "0.15.7"
+futures = "0.3.28"
+serde = { version = "1.0.183", features = ["derive"] }
+serde_yaml = "0.9.25"
+tokio = { version = "1.29.1", features = ["full"] }
