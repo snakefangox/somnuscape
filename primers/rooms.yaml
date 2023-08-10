@@ -18,7 +18,9 @@ rooms:
       east: Dragon Trap Room
   - name: Armory
     description: A dingy wooden room full to the ceiling with racks of armor and shelves of weapons, the floor is littered with broken chain rings
-    enemies: []
+    enemies:
+      - name: Animated Suit Of Armor
+        count: 2
   - name: Goblin Dining Hall
     description: A large room with a long wooden table, small chairs are strewn around the table and the room smells of rotting meat
     enemies:

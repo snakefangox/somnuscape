@@ -4,21 +4,6 @@ use serde::{Deserialize, Serialize};
 
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct CreatureSchema {
-    #[serde(rename = "creature_name")]
-    pub name: String,
-    pub attributes: Attributes,
-}
-
-#[derive(Debug, Default, Deserialize, Serialize, Clone)]
-pub struct Attributes {
-    pub health: u8,
-    pub strength: u8,
-    pub agility: u8,
-    pub intelligence: u8,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
 pub struct DungeonSchema {
     #[serde(rename = "dungeon_name")]
     pub name: String,

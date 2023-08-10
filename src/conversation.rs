@@ -10,7 +10,7 @@ use async_openai::{
 pub type Message = (Role, String);
 const CHAT_GPT: &str = "gpt-3.5-turbo";
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Conversation {
     messages: Vec<Message>,
     client: Client<OpenAIConfig>,
@@ -52,15 +52,17 @@ impl Conversation {
         self.messages.push((Role::User, msg.to_string()));
     }
 
-    /// Adds a message to the conversation and appends and returns the response
+    /// Temporarily adds a message to the conversation and appends and returns the response
+    /// Useful for querying a primed conversation
     pub async fn query(&mut self, msg: &str) -> Result<Message, OpenAIError> {
         self.add_message(msg);
         let answer = self.send().await?;
+        self.messages.pop();
         Ok(answer)
     }
 
-    /// Sends the conversation to the AI and appends and returns the response
-    pub async fn send(&mut self) -> Result<Message, OpenAIError> {
+    /// Sends the conversation to the AI and returns the response
+    pub async fn send(&self) -> Result<Message, OpenAIError> {
         let messages: Vec<ChatCompletionRequestMessage> = self
             .messages
             .iter()
@@ -84,8 +86,6 @@ impl Conversation {
             msg.role.clone(),
             msg.content.clone().unwrap_or_default().clone(),
         );
-
-        self.messages.push(msg.clone());
 
         Ok(msg)
     }

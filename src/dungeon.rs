@@ -1,8 +1,11 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::schema::{Attributes, Direction, DungeonSchema, EnemyPlacement, RoomSchema};
+use crate::{
+    creatures::{CreatureRegistry, Creature},
+    schema::{Direction, DungeonSchema, RoomSchema},
+};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Dungeon {
@@ -14,27 +17,27 @@ pub struct Dungeon {
 pub struct Room {
     name: String,
     description: String,
-    enemies: Vec<Enemy>,
+    enemies: Vec<Creature>,
     connections: HashMap<Direction, String>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Enemy {
-    name: String,
-    attributes: Attributes,
-}
-
 impl Dungeon {
-    pub fn from_schema(
+    pub async fn from_schema(
         schema: &DungeonSchema,
-        enemy_registry: &mut HashMap<String, Enemy>,
+        enemy_registry: &mut CreatureRegistry,
     ) -> Self {
         // TODO: Use this to pre-populate the enemies registry
-        let enemies: Vec<EnemyPlacement> = schema
+        let enemy_types: HashSet<String> = schema
             .rooms
             .iter()
             .flat_map(|r| r.enemies.clone())
+            .map(|ep| ep.name)
             .collect();
+
+        for enemy in enemy_types {
+            enemy_registry.get_creature(&enemy).await;
+        }
+
         let rooms = schema
             .rooms
             .iter()
@@ -56,7 +59,7 @@ impl Dungeon {
 }
 
 impl Room {
-    pub fn from_schema(schema: (RoomSchema, HashMap<Direction, String>, Vec<Enemy>)) -> Self {
+    pub fn from_schema(schema: (RoomSchema, HashMap<Direction, String>, Vec<Creature>)) -> Self {
         let (schema, connections, enemies) = schema;
         Self {
             name: schema.name.to_owned(),
@@ -83,14 +86,14 @@ fn link_connections(schema: &RoomSchema, rooms: &Vec<RoomSchema>) -> HashMap<Dir
 }
 
 /// Creates enemies by referencing the existing registry
-fn create_enemies(schema: &RoomSchema, enemy_registry: &HashMap<String, Enemy>) -> Vec<Enemy> {
-    // TODO: Use enemy registry and counts
-    schema
-        .enemies
-        .iter()
-        .map(|ep| Enemy {
-            name: ep.name.to_owned(),
-            attributes: Attributes::default(),
-        })
-        .collect()
+fn create_enemies(schema: &RoomSchema, enemy_registry: &CreatureRegistry) -> Vec<Creature> {
+    let mut enemies = Vec::new();
+    for ep in &schema.enemies {
+        let enemy = enemy_registry.get_creature_unwrap(&ep.name);
+        for _ in 0..ep.count {
+            enemies.push(enemy.clone());
+        }
+    }
+
+    enemies
 }

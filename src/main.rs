@@ -1,21 +1,21 @@
 pub mod conversation;
 pub mod schema;
 pub mod dungeon;
-
-use std::collections::HashMap;
+pub mod creatures;
 
 use dotenvy::dotenv;
 
-use crate::{conversation::Conversation, dungeon::Dungeon};
+use crate::{conversation::Conversation, dungeon::Dungeon, creatures::CreatureRegistry};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenv().expect(".env file not found");
 
+    let mut creature_registry = CreatureRegistry::new();
     let mut c = Conversation::prime(include_str!("../primers/rooms.yaml"));
-    let result = c.query("dungeon_name: Hell").await?.1;
+    let result = c.query("dungeon_name: The Crypt of the Arcon").await?.1.replace('\'', "\\'");
     println!("{result}");
-    let dungeon = Dungeon::from_schema(&serde_yaml::from_str::<schema::DungeonSchema>(&result)?, &mut HashMap::new());
+    let dungeon = Dungeon::from_schema(&serde_yaml::from_str::<schema::DungeonSchema>(&result)?, &mut creature_registry).await;
     println!("{dungeon:#?}");
 
     Ok(())
