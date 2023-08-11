@@ -1,40 +1,62 @@
-You are an expert tabletop rpg dungeon designer, you produce dungeon layouts using the yaml format
+You are an expert tabletop rpg dungeon designer, you produce dungeon layouts using the json format
 ---
 dungeon_name: The Frozen Caverns
 ---
-dungeon_name: The Frozen Caverns
-rooms:
-  - name: Cliffside Entrance
-    description: A dark split in the middle of the cliffside which turns to and fro, leading off into the darkness
-    enemies: []
-    connections:
-      north: Icy Vestibule
-  - name: Icy Vestibule
-    description: A large icy chamber with stalactites hanging from the vaulted ceiling, a number of narrow passages wind off in every direction
-    enemies: []
-    connections:
-      north: Armory
-      west: Goblin Dining Hall
-      east: Dragon Trap Room
-  - name: Armory
-    description: A dingy wooden room full to the ceiling with racks of armor and shelves of weapons, the floor is littered with broken chain rings
-    enemies:
-      - Animated Suit Of Armor
-      - Animated Suit Of Armor
-  - name: Goblin Dining Hall
-    description: A large room with a long wooden table, small chairs are strewn around the table and the room smells of rotting meat
-    enemies:
-      - Goblin
-      - Goblin
-      - Goblin
-  - name: Dragon Trap Room
-    description: A narrow hallway with a low ceiling and an ornately decorated floor, the walls are covered in what look like termite holes
-    enemies: []
-    connections:
-      east: Dragon Lair
-  - name: Dragon Lair
-    description: A large cavern, the floor is covered in golden coins, trinkets and jewellery. In the middle of the pile, an enormous black dragon lies sleeping 
-    enemies:
-      - Great Dragon
-    connections:
-      west: Dragon Trap Room
+{
+  "dungeon_name": "The Frozen Caverns",
+  "rooms": [
+    {
+      "name": "Cliffside Entrance",
+      "description": "A dark split in the middle of the cliffside which turns to and fro, leading off into the darkness",
+      "enemies": [],
+      "connections": {
+        "north": "Icy Vestibule"
+      }
+    },
+    {
+      "name": "Icy Vestibule",
+      "description": "A large icy chamber with stalactites hanging from the vaulted ceiling, a number of narrow passages wind off in every direction",
+      "enemies": [],
+      "connections": {
+        "north": "Armory",
+        "west": "Goblin Dining Hall",
+        "east": "Dragon Trap Room"
+      }
+    },
+    {
+      "name": "Armory",
+      "description": "A dingy wooden room full to the ceiling with racks of armor and shelves of weapons, the floor is littered with broken chain rings",
+      "enemies": [
+        "Animated Suit Of Armor",
+        "Animated Suit Of Armor"
+      ]
+    },
+    {
+      "name": "Goblin Dining Hall",
+      "description": "A large room with a long wooden table, small chairs are strewn around the table and the room smells of rotting meat",
+      "enemies": [
+        "Goblin",
+        "Goblin",
+        "Goblin"
+      ]
+    },
+    {
+      "name": "Dragon Trap Room",
+      "description": "A narrow hallway with a low ceiling and an ornately decorated floor, the walls are covered in what look like termite holes",
+      "enemies": [],
+      "connections": {
+        "east": "Dragon Lair"
+      }
+    },
+    {
+      "name": "Dragon Lair",
+      "description": "A large cavern, the floor is covered in golden coins, trinkets and jewellery. In the middle of the pile, an enormous black dragon lies sleeping",
+      "enemies": [
+        "Great Dragon"
+      ],
+      "connections": {
+        "west": "Dragon Trap Room"
+      }
+    }
+  ]
+}
