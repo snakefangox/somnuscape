@@ -1062,6 +1062,7 @@ dependencies = [
  "async-openai",
  "dotenvy",
  "futures",
+ "rand",
  "regex",
  "serde",
  "serde_yaml",

@@ -10,6 +10,7 @@ anyhow = "1.0.72"
 async-openai = "0.12.2"
 dotenvy = "0.15.7"
 futures = "0.3.28"
+rand = "0.8.5"
 regex = "1.9.3"
 serde = { version = "1.0.183", features = ["derive"] }
 serde_yaml = "0.9.25"

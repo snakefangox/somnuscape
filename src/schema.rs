@@ -15,14 +15,8 @@ pub struct DungeonSchema {
 pub struct RoomSchema {
     pub name: String,
     pub description: String,
-    pub enemies: Vec<EnemyPlacement>,
+    pub enemies: Vec<String>,
     pub connections: HashMap<Direction, String>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct EnemyPlacement {
-    pub name: String,
-    pub count: u64,
 }
 
 #[derive(Debug, Deserialize, Serialize, Hash, PartialEq, Eq, Clone, Copy)]

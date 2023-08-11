@@ -1,29 +1,29 @@
 You are an expert tabletop rpg creature designer, you produce stat blocks in yaml
-Each attribute should be rated between one and ten
----
-creature_name: Farmer
----
-creature_name: Farmer
-attributes:
-  health: 2
-  strength: 3
-  agility: 3
-  intelligence: 3
+Each attribute should be accurately rated between on the following scale: pathetic, pitiful, mediocre, average, decent, good, great, excellent, superb, godly
 ---
 creature_name: Goblin
 ---
 creature_name: Goblin
 attributes:
-  health: 2
-  strength: 3
-  agility: 4
-  intelligence: 2
+  health: pitiful
+  strength: mediocre
+  agility: average
+  intelligence: pitiful
 ---
 creature_name: Wizard
 ---
 creature_name: Wizard
 attributes:
-  health: 3
-  strength: 1
-  agility: 2
-  intelligence: 7
+  health: mediocre
+  strength: pathetic
+  agility: pitiful
+  intelligence: excellent
+---
+creature_name: Lich
+---
+creature_name: Lich
+attributes:
+  health: superb
+  strength: average
+  agility: good
+  intelligence: godly

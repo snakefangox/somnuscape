@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    creatures::{CreatureRegistry, Creature},
+    creatures::{Creature, CreatureRegistry},
     schema::{Direction, DungeonSchema, RoomSchema},
 };
 
@@ -26,12 +26,10 @@ impl Dungeon {
         schema: &DungeonSchema,
         enemy_registry: &mut CreatureRegistry,
     ) -> Self {
-        // TODO: Use this to pre-populate the enemies registry
-        let enemy_types: HashSet<String> = schema
+        let enemy_types: HashSet<&String> = schema
             .rooms
             .iter()
-            .flat_map(|r| r.enemies.clone())
-            .map(|ep| ep.name)
+            .flat_map(|r| &r.enemies)
             .collect();
 
         for enemy in enemy_types {
@@ -87,13 +85,9 @@ fn link_connections(schema: &RoomSchema, rooms: &Vec<RoomSchema>) -> HashMap<Dir
 
 /// Creates enemies by referencing the existing registry
 fn create_enemies(schema: &RoomSchema, enemy_registry: &CreatureRegistry) -> Vec<Creature> {
-    let mut enemies = Vec::new();
-    for ep in &schema.enemies {
-        let enemy = enemy_registry.get_creature_unwrap(&ep.name);
-        for _ in 0..ep.count {
-            enemies.push(enemy.clone());
-        }
-    }
-
-    enemies
+    schema
+        .enemies
+        .iter()
+        .map(|n| enemy_registry.get_creature_unwrap(&n))
+        .collect()
 }

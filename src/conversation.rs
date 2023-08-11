@@ -61,6 +61,13 @@ impl Conversation {
         Ok(answer)
     }
 
+    /// Adds a message to the conversation and appends and returns the response
+    pub async fn request(&mut self, msg: &str) -> Result<Message, OpenAIError> {
+        self.add_message(msg);
+        let answer = self.send().await?;
+        Ok(answer)
+    }
+
     /// Sends the conversation to the AI and returns the response
     pub async fn send(&self) -> Result<Message, OpenAIError> {
         let messages: Vec<ChatCompletionRequestMessage> = self

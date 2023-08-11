@@ -54,8 +54,46 @@ pub struct Creature {
 
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]
 pub struct Attributes {
-    pub health: u8,
-    pub strength: u8,
-    pub agility: u8,
-    pub intelligence: u8,
+    pub health: AttributeRating,
+    pub strength: AttributeRating,
+    pub agility: AttributeRating,
+    pub intelligence: AttributeRating,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum AttributeRating {
+    Pathetic,
+    Pitiful,
+    Mediocre,
+    Average,
+    Decent,
+    Good,
+    Great,
+    Excellent,
+    Superb,
+    Godly,
+}
+
+impl AttributeRating {
+    pub fn rank(&self) -> u32 {
+        match self {
+            AttributeRating::Pathetic => 1,
+            AttributeRating::Pitiful => 2,
+            AttributeRating::Mediocre => 3,
+            AttributeRating::Average => 4,
+            AttributeRating::Decent => 5,
+            AttributeRating::Good => 6,
+            AttributeRating::Great => 7,
+            AttributeRating::Excellent => 8,
+            AttributeRating::Superb => 9,
+            AttributeRating::Godly => 10,
+        }
+    }
+}
+
+impl Default for AttributeRating {
+    fn default() -> Self {
+        AttributeRating::Average
+    }
 }

@@ -19,13 +19,14 @@ rooms:
   - name: Armory
     description: A dingy wooden room full to the ceiling with racks of armor and shelves of weapons, the floor is littered with broken chain rings
     enemies:
-      - name: Animated Suit Of Armor
-        count: 2
+      - Animated Suit Of Armor
+      - Animated Suit Of Armor
   - name: Goblin Dining Hall
     description: A large room with a long wooden table, small chairs are strewn around the table and the room smells of rotting meat
     enemies:
-      - name: Goblin
-        count: 3
+      - Goblin
+      - Goblin
+      - Goblin
   - name: Dragon Trap Room
     description: A narrow hallway with a low ceiling and an ornately decorated floor, the walls are covered in what look like termite holes
     enemies: []
@@ -34,7 +35,6 @@ rooms:
   - name: Dragon Lair
     description: A large cavern, the floor is covered in golden coins, trinkets and jewellery. In the middle of the pile, an enormous black dragon lies sleeping 
     enemies:
-      - name: Dragon
-        count: 1
+      - Great Dragon
     connections:
       west: Dragon Trap Room
