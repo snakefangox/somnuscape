@@ -4,7 +4,6 @@ pub mod core;
 pub mod creatures;
 pub mod dungeon;
 pub mod player;
-pub mod schema;
 
 use actix_web::{get, App, HttpResponse, HttpServer, Responder};
 use dotenvy::dotenv;
