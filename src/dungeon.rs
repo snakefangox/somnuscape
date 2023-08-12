@@ -3,28 +3,28 @@ use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    creatures::{Creature, CreatureRegistry},
+    creatures::{Creature, Bestiary},
     schema::{Direction, DungeonSchema, RoomSchema},
 };
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Dungeon {
-    name: String,
-    rooms: Vec<Room>,
+    pub name: String,
+    pub rooms: Vec<Room>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Room {
-    name: String,
-    description: String,
-    enemies: Vec<Creature>,
-    connections: HashMap<Direction, String>,
+    pub name: String,
+    pub description: String,
+    pub enemies: Vec<Creature>,
+    pub connections: HashMap<Direction, String>,
 }
 
 impl Dungeon {
     pub async fn from_schema(
         schema: &DungeonSchema,
-        enemy_registry: &mut CreatureRegistry,
+        enemy_registry: &mut Bestiary,
     ) -> Self {
         let enemy_types: HashSet<&String> = schema
             .rooms
@@ -84,7 +84,7 @@ fn link_connections(schema: &RoomSchema, rooms: &Vec<RoomSchema>) -> HashMap<Dir
 }
 
 /// Creates enemies by referencing the existing registry
-fn create_enemies(schema: &RoomSchema, enemy_registry: &CreatureRegistry) -> Vec<Creature> {
+fn create_enemies(schema: &RoomSchema, enemy_registry: &Bestiary) -> Vec<Creature> {
     schema
         .enemies
         .iter()

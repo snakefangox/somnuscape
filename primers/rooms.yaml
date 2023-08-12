@@ -29,7 +29,8 @@ dungeon_name: The Frozen Caverns
       "enemies": [
         "Animated Suit Of Armor",
         "Animated Suit Of Armor"
-      ]
+      ],
+      "connections": []
     },
     {
       "name": "Goblin Dining Hall",
@@ -38,7 +39,8 @@ dungeon_name: The Frozen Caverns
         "Goblin",
         "Goblin",
         "Goblin"
-      ]
+      ],
+      "connections": []
     },
     {
       "name": "Dragon Trap Room",

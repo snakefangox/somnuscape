@@ -2,12 +2,15 @@ pub mod conversation;
 pub mod creatures;
 pub mod dungeon;
 pub mod schema;
+pub mod player;
+pub mod combat;
+pub mod core;
 
 use dotenvy::dotenv;
 use rand::seq::SliceRandom;
 use regex::Regex;
 
-use crate::{conversation::Conversation, creatures::CreatureRegistry, dungeon::Dungeon};
+use crate::{conversation::Conversation, creatures::Bestiary, dungeon::Dungeon};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -24,7 +27,7 @@ async fn main() -> anyhow::Result<()> {
     names.shuffle(&mut rand::thread_rng());
     let name = names.pop().unwrap();
 
-    let mut creature_registry = CreatureRegistry::new();
+    let mut creature_registry = Bestiary::new();
     let mut c = Conversation::prime(include_str!("../primers/rooms.yaml"));
     let result = c.request(&format!("dungeon_name: {name}")).await?.1.replace('\'', "\\'");
     println!("{result}");

@@ -21,7 +21,7 @@ creature_name: Wizard
     "health": "mediocre",
     "strength": "pathetic",
     "agility": "pitiful",
-    "intelligence": "excellent"
+    "intelligence": "great"
   }
 }
 ---

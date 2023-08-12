@@ -1,0 +1,36 @@
+use serde::{Deserialize, Serialize};
+
+use crate::{core::Location, creatures::Attributes};
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Combat {
+    combatants: Vec<FighterRef>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum FighterRef {
+    Player(String),
+    Creature(Location, usize),
+}
+
+pub trait Fighter {
+    fn damage(&mut self, damage: u32);
+    fn health(&self) -> u32;
+    fn attributes(&self) -> &Attributes;
+}
+
+impl Combat {
+    pub fn new() -> Self {
+        Self {
+            combatants: Vec::new(),
+        }
+    }
+
+    pub fn take_turn(&mut self) {
+        
+    }
+}
+
+impl FighterRef {
+    
+}
