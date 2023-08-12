@@ -1,38 +1,41 @@
+pub mod combat;
 pub mod conversation;
+pub mod core;
 pub mod creatures;
 pub mod dungeon;
-pub mod schema;
 pub mod player;
-pub mod combat;
-pub mod core;
+pub mod schema;
 
+use actix_web::{get, App, HttpResponse, HttpServer, Responder};
 use dotenvy::dotenv;
-use rand::seq::SliceRandom;
-use regex::Regex;
 
-use crate::{conversation::Conversation, creatures::Bestiary, dungeon::Dungeon};
+use askama_actix::Template;
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+#[derive(Template)]
+#[template(path = "index.html")]
+struct Index {}
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
     dotenv().expect(".env file not found");
 
-    let mut c = Conversation::prime(include_str!("../primers/names.yaml"));
-    let names = c.query("10 fantasy dungeon names").await?.1;
-    let r = Regex::new(r"(?m)^[0-9]+\. (.*)$")?;
-    let mut names: Vec<String> = r
-        .captures_iter(&names)
-        .filter_map(|c| c.get(1).map(|c| c.as_str().to_owned()))
-        .collect();
-    println!("{names:#?}");
-    names.shuffle(&mut rand::thread_rng());
-    let name = names.pop().unwrap();
+    HttpServer::new(|| {
+        App::new()
+            .service(index)
+            .service(login)
+            .service(actix_files::Files::new("/assets", "./assets"))
+    })
+    .bind(("0.0.0.0", 8080))?
+    .run()
+    .await
+}
 
-    let mut creature_registry = Bestiary::new();
-    let mut c = Conversation::prime(include_str!("../primers/rooms.yaml"));
-    let result = c.request(&format!("dungeon_name: {name}")).await?.1.replace('\'', "\\'");
-    println!("{result}");
-    let dungeon = Dungeon::from_schema(&serde_yaml::from_str::<schema::DungeonSchema>(&result)?, &mut creature_registry).await;
-    println!("{dungeon:#?}");
+#[get("/")]
+async fn index() -> impl Responder {
+    Index {}
+}
 
-    Ok(())
+#[get("/login")]
+async fn login() -> impl Responder {
+    HttpResponse::Ok().body("Hello world!")
 }

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{core::Location, creatures::Attributes};
+use crate::{core::{Location, Attribute}, core::Attributes};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Combat {
@@ -11,6 +11,14 @@ pub struct Combat {
 pub enum FighterRef {
     Player(String),
     Creature(Location, usize),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Action {
+    Attack(FighterRef, Attribute),
+    Evade,
+    Push,
+    Escape,
 }
 
 pub trait Fighter {

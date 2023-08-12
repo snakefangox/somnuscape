@@ -1,6 +1,6 @@
 use serde::{Serialize, Deserialize};
 
-use crate::{creatures::Attributes, core::Location};
+use crate::core::{Attributes, Location};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Player {

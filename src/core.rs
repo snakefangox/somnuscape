@@ -24,6 +24,21 @@ pub enum AttributeRating {
     Godly,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub enum Attribute {
+    Strength,
+    Agility,
+    Intelligence,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
+pub struct Attributes {
+    pub health: AttributeRating,
+    pub strength: AttributeRating,
+    pub agility: AttributeRating,
+    pub intelligence: AttributeRating,
+}
+
 impl AttributeRating {
     pub fn rank(&self) -> u32 {
         match self {

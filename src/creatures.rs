@@ -2,21 +2,13 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{conversation::Conversation, core::AttributeRating};
+use crate::{conversation::Conversation, core::Attributes};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Creature {
     #[serde(rename = "creature_name")]
     pub name: String,
     pub attributes: Attributes,
-}
-
-#[derive(Debug, Default, Deserialize, Serialize, Clone)]
-pub struct Attributes {
-    pub health: AttributeRating,
-    pub strength: AttributeRating,
-    pub agility: AttributeRating,
-    pub intelligence: AttributeRating,
 }
 
 #[derive(Debug)]
@@ -39,7 +31,7 @@ impl Bestiary {
         if self.bestiary.contains_key(name) {
             self.bestiary[name].clone()
         } else {
-            let result = serde_yaml::from_str::<Creature>(
+            let result = serde_json::from_str::<Creature>(
                 &self
                     .stat_gen
                     .query(&format!("creature_name: {}", name))

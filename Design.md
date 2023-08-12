@@ -17,7 +17,7 @@ If the defender wins they gain momentum equal to the difference.
 Until the start of your next turn you roll defence with advantage (roll 2d6 drop the lowest).
 
 ### Push
-Burn 5 momentum to gain another action. (Because burning takes an action, technically this grants two)
+Burn 5 momentum to gain another action. (Because pushing takes an action, technically this grants two)
 
 ### Escape
 Try to run, if you aren't hit before the start of your next turn you escape.
