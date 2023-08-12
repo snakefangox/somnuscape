@@ -1,9 +1,9 @@
-pub mod combat;
-pub mod conversation;
-pub mod core;
-pub mod creatures;
-pub mod dungeon;
-pub mod player;
+mod combat;
+mod conversation;
+mod core;
+mod creatures;
+mod dungeon;
+mod player;
 
 use actix_web::{get, App, HttpResponse, HttpServer, Responder};
 use dotenvy::dotenv;
