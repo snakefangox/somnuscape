@@ -21,8 +21,8 @@ struct Index<'a> {
 }
 
 #[derive(Template)]
-#[template(path = "game.html")]
-struct Game<'a> {
+#[template(path = "adventure.html")]
+struct Adventure<'a> {
     name: &'a str,
 }
 
@@ -30,7 +30,7 @@ struct Game<'a> {
 async fn index(session: Session, req: HttpRequest) -> Result<impl Responder> {
     if session.get::<String>(USERNAME)?.is_some() {
         return Ok(HttpResponse::TemporaryRedirect()
-            .append_header(("Location", "/game"))
+            .append_header(("Location", "/adventure"))
             .body(()));
     }
 
@@ -73,7 +73,7 @@ async fn login(
             session.insert(USERNAME, &form.username).unwrap();
 
             return HttpResponse::SeeOther()
-                .append_header(("Location", "/game"))
+                .append_header(("Location", "/adventure"))
                 .body(());
         } else {
             return HttpResponse::Ok().body(
@@ -94,7 +94,7 @@ async fn login(
             .await;
         session.insert(USERNAME, &form.username).unwrap();
         return HttpResponse::SeeOther()
-            .append_header(("Location", "/game"))
+            .append_header(("Location", "/adventure"))
             .body(());
     }
 }
@@ -105,11 +105,11 @@ async fn logout(session: Session) -> Result<impl Responder> {
     Ok(HttpResponse::TemporaryRedirect().append_header(("Location", "/")).body(()))
 }
 
-#[get("/game")]
-async fn game(state: web::Data<State>, session: Session, req: HttpRequest) -> Result<impl Responder> {
+#[get("/adventure")]
+async fn adventure(state: web::Data<State>, session: Session, req: HttpRequest) -> Result<impl Responder> {
     if let Some(username) = session.get::<String>(USERNAME)? {
         if let Some(player) = state.get_player(&username).await {
-            return Ok(Game { name: &username }.respond_to(&req));
+            return Ok(Adventure { name: &username }.respond_to(&req));
         } else {
             session.remove(USERNAME);
         }

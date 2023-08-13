@@ -32,7 +32,7 @@ async fn main() -> anyhow::Result<()> {
             .service(routes::index)
             .service(routes::login)
             .service(routes::logout)
-            .service(routes::game)
+            .service(routes::adventure)
             .service(actix_files::Files::new("/assets", "./assets"))
     })
     .bind(("0.0.0.0", 8080))?
