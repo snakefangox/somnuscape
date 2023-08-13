@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Somnuscape - {{ name }}</title>
+    <link rel="icon" href="/assets/favicon.svg">
+    <link href="/assets/bootstrap.css" rel="stylesheet">
+</head>
+
+<body>
+    <div class="d-flex justify-content-around align-items-baseline pd-6 bg-light-subtle shadow-sm">
+        <p class="fs-3 fw-semibold">Somnuscape</p>
+        <p class="fs-3">{{ name }}</p>
+        <a class="btn btn-dark" href="/logout" role="button">Logout</a>
+    </div>
+    <div id="main" class="container h-100 bg-light">
+
+    </div>
+
+    <script src="/assets/htmx.js"></script>
+    <script src="/assets/bootstrap.js"></script>
+</body>
+
+</html>

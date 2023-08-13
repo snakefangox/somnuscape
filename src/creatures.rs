@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{conversation::Conversation, core::Attributes};
+use crate::core::{Attributes, Conversation};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Creature {
