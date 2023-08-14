@@ -1,25 +1,74 @@
-<!doctype html>
-<html lang="en" data-bs-theme="dark">
+{% extends "base.html" %}
 
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Somnuscape - {{ name }}</title>
-    <link rel="icon" href="/assets/favicon.svg">
-    <link href="/assets/bootstrap.css" rel="stylesheet">
-</head>
+{% block title %}Somnuscape - {{ name }}{% endblock title %}
 
-<body>
-    <div class="d-flex justify-content-around align-items-baseline pd-6 bg-light-subtle shadow-sm">
-        <p class="fs-3 fw-semibold">Somnuscape</p>
-        <p class="fs-3">{{ name }}</p>
-        <a class="btn btn-dark" href="/logout" role="button">Logout</a>
-    </div>
-    <div id="main" class="container h-100">
-    </div>
+{% block body %}
+{% include "nav.html" %}
+<div id="main" class="container h-100">
+    <form name="character_sheet" action="/create_character" method="post">
+        <div class="row">
+            <div class="col">
+                <h2 class="my-4">Character Name: {{ name }}</h2>
+                <h2>Attributes:</h2>
+                <h4 id="pointcounter">Points Remaining: {{ crate::core::STARTING_POINT_TOTAL - 3 }}</h4>
 
-    <script src="/assets/htmx.js"></script>
-    <script src="/assets/bootstrap.js"></script>
-</body>
+                <div>
+                    {% for attr in ["Strength", "Agility", "Intelligence"] %}
+                    <h3 class="mt-4 mb-2" id="{{ attr }}">{{ attr }}: Pathetic</h3>
+                    {% for i in 1..11 %}
+                    <input type="radio" class="btn-check" id="{{ attr }}{{ i }}" name="{{ attr|lower }}" value="{{ i }}"
+                        onclick="onAttrChange()" {% if loop.first -%} checked {%- endif %} />
+                    <label class="btn btn-outline-primary" for="{{ attr }}{{ i }}">{{ i }}</label>
+                    {% endfor %}
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="col">
 
-</html>
+            </div>
+            <button type="submit" class="btn btn-primary mt-4" id="submit">Start Adventure!</button>
+        </div>
+    </form>
+</div>
+
+<script>
+    const pointTotal = {{ crate::core::STARTING_POINT_TOTAL }};
+
+    function setValid(valid) {
+        document.getElementById("submit").disabled = !valid;
+    }
+
+    function onAttrChange() {
+        const attrs = ['Strength', 'Agility', 'Intelligence'];
+        const levels = ["Pathetic", "Pitiful", "Mediocre", "Average", "Decent", "Good", "Great", "Excellent", "Superb", "Godly"];
+        var buttons = [document.getElementsByName('strength'), document.getElementsByName('agility'), document.getElementsByName('intelligence')];
+        var total = 0;
+        for (i = 0; i < buttons.length; i++) {
+            for (j = 0; j < buttons[i].length; j++) {
+                if (buttons[i][j].checked) {
+                    total += parseInt(buttons[i][j].value)
+                    document.getElementById(attrs[i]).innerHTML = attrs[i] + ": " + levels[j];
+                    break;
+                }
+            }
+        }
+
+        total = pointTotal - total;
+        var pointcounter = document.getElementById("pointcounter");
+        pointcounter.innerHTML = "Points Remaining: " + total;
+        setValid(total >= 0);
+
+        if (total < 0) {
+            pointcounter.classList.remove("text-success", "text-warning");
+            pointcounter.classList.add("text-danger");
+        } else if (total > 0) {
+            pointcounter.classList.remove("text-danger", "text-success");
+            pointcounter.classList.add("text-warning");
+        } else {
+            pointcounter.classList.remove("text-danger", "text-warning");
+            pointcounter.classList.add("text-success");
+        }
+    }
+    window.onload = onAttrChange;
+</script>
+{% endblock body %}

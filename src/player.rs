@@ -2,12 +2,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::{Attributes, Location};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Player {
     pub name: String,
     pub salt: String,
     pub password: [u8; 32],
-    location: Location,
+    pub location: Location,
     attributes: Attributes,
 }
 
@@ -20,5 +20,9 @@ impl Player {
             location: Location::default(),
             attributes: Attributes::default(),
         }
+    }
+
+    pub fn creation_complete(&self) -> bool {
+        !self.location.is_empty()
     }
 }

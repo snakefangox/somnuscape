@@ -11,10 +11,18 @@ use async_openai::{
 };
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+pub const STARTING_POINT_TOTAL: u32 = 12;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Location {
     area: String,
     room: String,
+}
+
+impl Location {
+    pub fn is_empty(&self) -> bool {
+        self.area.is_empty() && self.room.is_empty()
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, PartialOrd, Ord)]

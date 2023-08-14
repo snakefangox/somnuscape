@@ -7,9 +7,11 @@ use rand::Rng;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-use crate::{player::Player, state::State};
+use crate::{
+    player::Player,
+    web_types::{State, USERNAME},
+};
 
-const USERNAME: &str = "username";
 lazy_static! {
     static ref USERNAME_RE: Regex = Regex::new(r"^[[:word:]]{1,64}$").unwrap();
 }
@@ -21,19 +23,19 @@ struct Index<'a> {
 }
 
 #[derive(Template)]
+#[template(path = "character_creation.html")]
+struct CharacterCreation<'a> {
+    name: &'a str,
+}
+
+#[derive(Template)]
 #[template(path = "adventure.html")]
 struct Adventure<'a> {
     name: &'a str,
 }
 
 #[get("/")]
-async fn index(session: Session, req: HttpRequest) -> Result<impl Responder> {
-    if session.get::<String>(USERNAME)?.is_some() {
-        return Ok(HttpResponse::TemporaryRedirect()
-            .append_header(("Location", "/adventure"))
-            .body(()));
-    }
-
+async fn index(req: HttpRequest) -> Result<impl Responder> {
     Ok(Index { error: "" }.respond_to(&req))
 }
 
@@ -94,7 +96,7 @@ async fn login(
             .await;
         session.insert(USERNAME, &form.username).unwrap();
         return HttpResponse::SeeOther()
-            .append_header(("Location", "/adventure"))
+            .append_header(("Location", "/character_creation"))
             .body(());
     }
 }
@@ -102,19 +104,64 @@ async fn login(
 #[get("/logout")]
 async fn logout(session: Session) -> Result<impl Responder> {
     session.remove(USERNAME);
-    Ok(HttpResponse::TemporaryRedirect().append_header(("Location", "/")).body(()))
+    Ok(HttpResponse::TemporaryRedirect()
+        .append_header(("Location", "/"))
+        .body(()))
+}
+
+#[get("/character_creation")]
+async fn character_creation(
+    state: web::Data<State>,
+    player: Player,
+    req: HttpRequest,
+) -> Result<impl Responder> {
+    if player.creation_complete() {
+        return Ok(HttpResponse::SeeOther()
+            .append_header(("Location", "/adventure"))
+            .body(()));
+    }
+
+    return Ok(CharacterCreation { name: &player.name }.respond_to(&req));
+}
+
+#[derive(Serialize, Deserialize)]
+struct CharacterCreateFormData {
+    strength: u32,
+    agility: u32,
+    intelligence: u32,
+}
+
+#[post("/create_character")]
+async fn create_character(
+    state: web::Data<State>,
+    player: Player,
+    req: HttpRequest,
+    form: web::Form<CharacterCreateFormData>,
+) -> Result<impl Responder> {
+    if player.creation_complete() {
+        return Ok(HttpResponse::SeeOther()
+            .append_header(("Location", "/adventure"))
+            .body(()));
+    }
+
+    println!("{}, {}, {}", form.strength, form.agility, form.intelligence);
+
+    return Ok(CharacterCreation { name: &player.name }.respond_to(&req));
 }
 
 #[get("/adventure")]
-async fn adventure(state: web::Data<State>, session: Session, req: HttpRequest) -> Result<impl Responder> {
-    if let Some(username) = session.get::<String>(USERNAME)? {
-        if let Some(player) = state.get_player(&username).await {
-            return Ok(Adventure { name: &username }.respond_to(&req));
-        } else {
-            session.remove(USERNAME);
-        }
+async fn adventure(
+    state: web::Data<State>,
+    player: Player,
+    req: HttpRequest,
+) -> Result<impl Responder> {
+    if !player.creation_complete() {
+        return Ok(HttpResponse::SeeOther()
+            .append_header(("Location", "/character_creation"))
+            .body(()));
     }
-    return Ok(HttpResponse::TemporaryRedirect()
-        .append_header(("Location", "/"))
+
+    return Ok(HttpResponse::SeeOther()
+        .append_header(("Location", "/adventure"))
         .body(()));
 }
