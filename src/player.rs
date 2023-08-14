@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::core::{Attributes, Location};
+use crate::core::{AttributeRating, Attributes, Location};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Player {
@@ -23,6 +23,18 @@ impl Player {
     }
 
     pub fn creation_complete(&self) -> bool {
-        !self.location.is_empty()
+        !self.location.is_character_creation()
+    }
+
+    pub fn finish_character_creation(
+        &mut self,
+        strength: AttributeRating,
+        agility: AttributeRating,
+        intelligence: AttributeRating,
+    ) {
+        self.attributes.strength = strength;
+        self.attributes.agility = agility;
+        self.attributes.intelligence = intelligence;
+        self.location = Location::Town;
     }
 }

@@ -8,6 +8,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    core::{self, AttributeRating},
     player::Player,
     web_types::{State, USERNAME},
 };
@@ -134,8 +135,7 @@ struct CharacterCreateFormData {
 #[post("/create_character")]
 async fn create_character(
     state: web::Data<State>,
-    player: Player,
-    req: HttpRequest,
+    mut player: Player,
     form: web::Form<CharacterCreateFormData>,
 ) -> Result<impl Responder> {
     if player.creation_complete() {
@@ -144,9 +144,22 @@ async fn create_character(
             .body(()));
     }
 
-    println!("{}, {}, {}", form.strength, form.agility, form.intelligence);
+    let total = form.strength + form.agility + form.intelligence;
+    let s = AttributeRating::from_rank(form.strength);
+    let a = AttributeRating::from_rank(form.agility);
+    let i = AttributeRating::from_rank(form.intelligence);
+    if total > core::STARTING_POINT_TOTAL || s.is_none() || a.is_none() || i.is_none() {
+        return Ok(HttpResponse::SeeOther()
+            .append_header(("Location", "/create_character"))
+            .body(()));
+    }
 
-    return Ok(CharacterCreation { name: &player.name }.respond_to(&req));
+    player.finish_character_creation(s.unwrap(), a.unwrap(), i.unwrap());
+    state.set_player(player).await;
+
+    return Ok(HttpResponse::SeeOther()
+        .append_header(("Location", "/adventure"))
+        .body(()));
 }
 
 #[get("/adventure")]
@@ -161,7 +174,19 @@ async fn adventure(
             .body(()));
     }
 
-    return Ok(HttpResponse::SeeOther()
-        .append_header(("Location", "/adventure"))
-        .body(()));
+    return Ok(Adventure { name: &player.name }.respond_to(&req));
+}
+
+#[derive(Serialize, Deserialize)]
+struct ChatFormData {
+    message: String,
+}
+
+#[post("/chat")]
+async fn chat(
+    form: web::Form<ChatFormData>,
+) -> Result<impl Responder> {
+    println!("{}", form.message);
+
+    Ok(HttpResponse::Ok().body(format!("<p>User: {}</p>", form.message)))
 }

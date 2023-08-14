@@ -131,12 +131,11 @@ where
             };
 
             if !auth && (!["/", "/login"].contains(&req.path())) {
-                return Ok(req.into_response(
-                    HttpResponse::TemporaryRedirect()
-                        .append_header(("Location", "/"))
-                        .finish()
-                        .map_into_right_body(),
-                ));
+                return make_redirect(req, "/");
+            }
+
+            if auth && req.path() == "/" {
+                return make_redirect(req, "/adventure");
             }
 
             let res = service
@@ -147,4 +146,16 @@ where
         }
         .boxed_local()
     }
+}
+
+fn make_redirect<B>(
+    req: ServiceRequest,
+    redirect: &str,
+) -> Result<ServiceResponse<EitherBody<B>>, Error> {
+    Ok(req.into_response(
+        HttpResponse::TemporaryRedirect()
+            .append_header(("Location", redirect))
+            .finish()
+            .map_into_right_body(),
+    ))
 }

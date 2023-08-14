@@ -15,7 +15,7 @@
                 <div>
                     {% for attr in ["Strength", "Agility", "Intelligence"] %}
                     <h3 class="mt-4 mb-2" id="{{ attr }}">{{ attr }}: Pathetic</h3>
-                    {% for i in 1..11 %}
+                    {% for i in 1..9 %}
                     <input type="radio" class="btn-check" id="{{ attr }}{{ i }}" name="{{ attr|lower }}" value="{{ i }}"
                         onclick="onAttrChange()" {% if loop.first -%} checked {%- endif %} />
                     <label class="btn btn-outline-primary" for="{{ attr }}{{ i }}">{{ i }}</label>

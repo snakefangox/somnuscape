@@ -13,15 +13,28 @@ use serde::{Deserialize, Serialize};
 
 pub const STARTING_POINT_TOTAL: u32 = 12;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct Location {
-    area: String,
-    room: String,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Location {
+    CharacterCreation,
+    Town,
+    Dungeon {
+        area: String,
+        room: String,
+    },
 }
 
 impl Location {
-    pub fn is_empty(&self) -> bool {
-        self.area.is_empty() && self.room.is_empty()
+    pub fn is_character_creation(&self) -> bool {
+        match self {
+            Location::CharacterCreation => true,
+            _ => false,
+        }
+    }
+}
+
+impl Default for Location {
+    fn default() -> Self {
+        Location::CharacterCreation
     }
 }
 
@@ -56,6 +69,22 @@ pub struct Attributes {
 }
 
 impl AttributeRating {
+    pub fn from_rank(rank:u32) -> Option<AttributeRating> {
+        match rank {
+            1 => Some(AttributeRating::Pathetic),
+            2 => Some(AttributeRating::Pitiful),
+            3 => Some(AttributeRating::Mediocre),
+            4 => Some(AttributeRating::Average),
+            5 => Some(AttributeRating::Decent),
+            6 => Some(AttributeRating::Good),
+            7 => Some(AttributeRating::Great),
+            8 => Some(AttributeRating::Excellent),
+            9 => Some(AttributeRating::Superb),
+            10 => Some(AttributeRating::Godly),
+            _ => None,
+        }
+    }
+
     pub fn rank(&self) -> u32 {
         match self {
             AttributeRating::Pathetic => 1,
