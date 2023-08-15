@@ -1,6 +1,5 @@
 mod combat;
 mod core;
-mod creatures;
 mod dungeon;
 mod player;
 mod routes;
@@ -13,9 +12,8 @@ use actix_web::{cookie::Key, web, App, HttpServer};
 use anyhow::Ok;
 use async_openai::{Client, config::OpenAIConfig};
 use base64::Engine;
-use creatures::Creature;
 use dotenvy::dotenv;
-use dungeon::Dungeon;
+use dungeon::{Dungeon, Creature};
 use web_types::{PlayerAuthTransform, State};
 
 use crate::core::Conversation;

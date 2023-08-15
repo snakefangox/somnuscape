@@ -3,8 +3,7 @@ use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    creatures::{Bestiary, Creature},
-    web_types::Keyed,
+    web_types::Keyed, core::Attributes,
 };
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -33,6 +32,13 @@ pub enum Direction {
     West,
     Up,
     Down,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct Creature {
+    #[serde(rename = "creature_name")]
+    pub name: String,
+    pub attributes: Attributes,
 }
 
 impl Dungeon {
@@ -102,5 +108,15 @@ impl Direction {
             Direction::Up => Self::Down,
       Direction::Down => Self::Up,
         }
+    }
+}
+
+impl Keyed for Creature {
+    fn get_key() -> &'static str {
+        "creatures"
+    }
+
+    fn name(&self) -> &str {
+        &self.name
     }
 }
