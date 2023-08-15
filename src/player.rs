@@ -6,14 +6,16 @@ use crate::{core::{AttributeRating, Attributes, Location}, web_types::Keyed};
 pub struct Player {
     pub name: String,
     pub location: Location,
-    attributes: Attributes,
+    pub health: u32,
+    pub attributes: Attributes,
 }
-
+ 
 impl Player {
     pub fn new(name: String) -> Self {
         Self {
             name,
             location: Location::default(),
+            health: AttributeRating::default().max_health(),
             attributes: Attributes::default(),
         }
     }

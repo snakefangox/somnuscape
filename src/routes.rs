@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     core::{self, AttributeRating},
     player::Player,
-    web_types::{State, USERNAME, UserCreds},
+    web_types::{State, UserCreds, USERNAME},
 };
 
 lazy_static! {
@@ -33,6 +33,7 @@ struct CharacterCreation<'a> {
 #[template(path = "adventure.html")]
 struct Adventure<'a> {
     name: &'a str,
+    p: &'a Player,
 }
 
 #[get("/")]
@@ -110,10 +111,7 @@ async fn logout(session: Session) -> Result<impl Responder> {
 }
 
 #[get("/character_creation")]
-async fn character_creation(
-    player: Player,
-    req: HttpRequest,
-) -> Result<impl Responder> {
+async fn character_creation(player: Player, req: HttpRequest) -> Result<impl Responder> {
     if player.creation_complete() {
         return Ok(HttpResponse::SeeOther()
             .append_header(("Location", "/adventure"))
@@ -172,7 +170,11 @@ async fn adventure(
             .body(()));
     }
 
-    return Ok(Adventure { name: &player.name }.respond_to(&req));
+    return Ok(Adventure {
+        name: &player.name,
+        p: &player,
+    }
+    .respond_to(&req));
 }
 
 #[derive(Serialize, Deserialize)]

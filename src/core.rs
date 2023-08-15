@@ -99,6 +99,10 @@ impl AttributeRating {
             AttributeRating::Godly => 10,
         }
     }
+
+    pub fn max_health(&self) -> u32 {
+        (self.rank() * 2) + 2
+    }
 }
 
 impl Display for AttributeRating {

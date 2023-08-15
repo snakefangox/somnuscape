@@ -14,14 +14,15 @@
         <div class="col-3">
             <div class="shadow p-1 rounded-top bg-secondary-subtle d-flex flex-column"
                 style="height: calc(100vh - (120px));">
-                <div class="px-1">
+                <div class="px-1 border-bottom">
                     <h4 class="text-center">Attributes</h4>
-                    <p>Health: 10/10</p>
-                    <p>Strength: Average</p>
-                    <p>Agility: Average</p>
-                    <p>Intelligence: Average</p>
+                    <p>Health: {{ p.health }}/{{ p.attributes.health.max_health() }}</p>
+                    <p>Strength: {{ "{:#}"|format(p.attributes.strength) }}</p>
+                    <p>Agility: {{ "{:#}"|format(p.attributes.agility) }}</p>
+                    <p>Intelligence: {{ "{:#}"|format(p.attributes.intelligence) }}</p>
                 </div>
-                <ul class="overflow-y-scroll border-top list-group list-group-flush" id="chatbox">
+                <h4 class="mt-1 text-center">Chat</h4>
+                <ul class="overflow-y-scroll list-group list-group-flush" id="chatbox">
                 </ul>
             </div>
         </div>
