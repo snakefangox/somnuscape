@@ -11,11 +11,11 @@ use std::{collections::HashSet, time::Duration};
 use actix_session::{storage::CookieSessionStore, SessionMiddleware};
 use actix_web::{cookie::Key, web, App, HttpServer};
 use anyhow::Ok;
+use async_openai::{Client, config::OpenAIConfig};
 use base64::Engine;
 use creatures::Creature;
 use dotenvy::dotenv;
 use dungeon::Dungeon;
-use futures::executor::block_on;
 use web_types::{PlayerAuthTransform, State};
 
 use crate::core::Conversation;
@@ -27,7 +27,7 @@ async fn main() -> anyhow::Result<()> {
 
     let session_key = base64::prelude::BASE64_STANDARD.decode(std::env::var("SESSION_KEY")?)?;
 
-    std::thread::spawn(Storyteller::run);
+    tokio::spawn(Storyteller::run());
 
     HttpServer::new(move || {
         App::new()
@@ -53,26 +53,29 @@ async fn main() -> anyhow::Result<()> {
     .map_err(anyhow::Error::from)
 }
 
-/// How many times the janitor runs an hour
-const STORYTELLER_FREQ: u64 = 60;
+const STORYTELLER_INTERVAL: Duration = Duration::from_secs(30);
 
-/// Creates and manages the world
-pub struct Storyteller;
+/// Creates and manages everything we need AI for
+pub struct Storyteller {
+    state :State,
+    ai: Client<OpenAIConfig>,
+}
 
 impl Storyteller {
-    pub fn run() {
+    pub async fn run() {
         let state = State::new();
 
-        block_on(async {
-            loop {
-                let dungeons: HashSet<String> = state.list::<Dungeon>().await;
-                if dungeons.len() < 10 {
-                    let _ = Storyteller::generate_dungeons(&state).await;
-                }
+        let mut interval = tokio::time::interval(STORYTELLER_INTERVAL);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
-                std::thread::sleep(Duration::from_secs(3600 / STORYTELLER_FREQ))
+        loop {
+            let dungeons: HashSet<String> = state.list::<Dungeon>().await;
+            if dungeons.len() < 10 {
+                let _ = Storyteller::generate_dungeons(&state).await;
             }
-        });
+
+            interval.tick().await;
+        }
     }
 
     async fn generate_dungeons(state: &State) -> anyhow::Result<()> {

@@ -36,7 +36,7 @@
         </div>
         <div class="col-3">
             <form class="shadow d-flex p-1 rounded-bottom border-top bg-secondary-subtle" hx-post="/chat"
-                hx-target="#chatbox" hx-swap="beforeend" hx-on::after-request="this.reset()">
+                hx-target="#chatbox" hx-swap="beforeend" hx-on::after-request="this.reset()" autocomplete="off">
                 <input type="text" class="flex-grow-1 form-control overflow-scroll rounded-end-0" name="message"
                     id="message" placeholder="Message...">
                 <button type="submit" class="btn btn-primary rounded-start-0" id="send">Send</button>
