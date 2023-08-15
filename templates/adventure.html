@@ -7,12 +7,13 @@
 <div id="main" class="container-fluid">
     <div class="row mt-2">
         <div class="col">
-            <div class="shadow p-1 overflow-y-scroll rounded-top bg-secondary-subtle" style="height: calc(100vh - (120px));">
-                Hello
+            <div class="shadow p-1 overflow-y-scroll rounded-top bg-secondary-subtle"
+                style="height: calc(100vh - (120px));">
             </div>
         </div>
         <div class="col-3">
-            <div class="shadow p-1 overflow-y-scroll rounded-top bg-secondary-subtle d-flex flex-column" style="height: calc(100vh - (120px));">
+            <div class="shadow p-1 rounded-top bg-secondary-subtle d-flex flex-column"
+                style="height: calc(100vh - (120px));">
                 <div class="px-1">
                     <h4 class="text-center">Attributes</h4>
                     <p>Health: 10/10</p>
@@ -20,23 +21,24 @@
                     <p>Agility: Average</p>
                     <p>Intelligence: Average</p>
                 </div>
-                <div class="border-top" id="chatbox">
-                    <p>User: Hey</p>
-                </div>
+                <ul class="overflow-y-scroll border-top list-group list-group-flush" id="chatbox">
+                </ul>
             </div>
         </div>
     </div>
     <div class="row">
         <div class="col">
-            <div class="shadow p-1 overflow-x-scroll rounded-bottom border-top bg-secondary-subtle">
+            <div class="shadow p-1 overflow-y-scroll rounded-bottom border-top bg-secondary-subtle">
                 <form>
                     <button type="submit" class="btn btn-primary" id="submit">Commit</button>
                 </form>
             </div>
         </div>
         <div class="col-3">
-            <form class="shadow d-flex p-1 rounded-bottom border-top bg-secondary-subtle" hx-post="/chat" hx-target="#chatbox" hx-swap="beforeend" hx-on::after-request="this.reset()">
-                <input type="text" class="flex-grow-1 form-control overflow-scroll rounded-end-0" name="message" id="message" placeholder="Message...">
+            <form class="shadow d-flex p-1 rounded-bottom border-top bg-secondary-subtle" hx-post="/chat"
+                hx-target="#chatbox" hx-swap="beforeend" hx-on::after-request="this.reset()">
+                <input type="text" class="flex-grow-1 form-control overflow-scroll rounded-end-0" name="message"
+                    id="message" placeholder="Message...">
                 <button type="submit" class="btn btn-primary rounded-start-0" id="send">Send</button>
             </form>
         </div>

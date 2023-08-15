@@ -2,13 +2,23 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::core::{Attributes, Conversation};
+use crate::{core::{Attributes, Conversation}, web_types::Keyed};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Creature {
     #[serde(rename = "creature_name")]
     pub name: String,
     pub attributes: Attributes,
+}
+
+impl Keyed for Creature {
+    fn get_key() -> &'static str {
+        "creatures"
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
 }
 
 #[derive(Debug)]

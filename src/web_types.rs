@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     future::{ready, Ready},
     rc::Rc,
 };
@@ -11,10 +12,18 @@ use actix_web::{
 };
 use futures::{future::LocalBoxFuture, FutureExt};
 use redis::AsyncCommands;
+use serde::{Deserialize, Serialize};
 
 use crate::player::Player;
 
 pub const USERNAME: &str = "username";
+
+pub trait Keyed {
+    /// The namespace to use for the resource, should be plural (players:{name} not player:{name})
+    fn get_key() -> &'static str;
+    /// Gets a unique (among resources of that type) name for a specific instance of the resource
+    fn name(&self) -> &str;
+}
 
 #[derive(Debug, Clone)]
 pub struct State {
@@ -39,21 +48,78 @@ impl State {
             .expect("Redis should be available")
     }
 
-    pub async fn get_player(&self, name: &str) -> Option<Player> {
-        let json: String = self.con().await.get(format!("player:{name}")).await.ok()?;
-        serde_json::from_str(&json).ok()
+    pub async fn get<T>(&self, name: &str) -> Option<T>
+    where
+        T: for<'a> Deserialize<'a> + Keyed,
+    {
+        let key = T::get_key();
+        let json: String = self.con().await.get(format!("{key}:{name}")).await.ok()?;
+        serde_json::from_str::<T>(&json).ok()
     }
 
-    pub async fn set_player(&self, player: Player) {
-        let name = &player.name;
+    pub async fn set<T>(&self, val: &T)
+    where
+        T: Serialize + Keyed,
+    {
+        let mut con = self.con().await;
+        let key = T::get_key();
+        let name = val.name();
+        con.set::<String, String, ()>(
+            format!("{key}:{name}"),
+            serde_json::to_string(&val).unwrap(),
+        )
+        .await
+        .unwrap();
+        con.sadd::<&str, &str, ()>(key, name).await.unwrap();
+    }
+
+    pub async fn list<T>(&self) -> HashSet<String>
+    where
+        T: Keyed,
+    {
         self.con()
             .await
-            .set::<String, String, ()>(
-                format!("player:{name}"),
-                serde_json::to_string(&player).unwrap(),
-            )
+            .smembers(T::get_key())
             .await
-            .unwrap();
+            .unwrap_or_default()
+    }
+
+    pub async fn has<T>(&self, name: &str) -> bool
+    where
+        T: Keyed,
+    {
+        self.con()
+            .await
+            .sismember::<&str, &str, bool>(T::get_key(), name)
+            .await
+            .unwrap()
+    }
+
+    pub async fn add_user(&self, name: String, password: [u8; 32], salt: String) {
+        self.set(&Player::new(name.clone())).await;
+        self.set(&UserCreds {
+            name,
+            password,
+            salt,
+        })
+        .await;
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct UserCreds {
+    pub name: String,
+    pub salt: String,
+    pub password: [u8; 32],
+}
+
+impl Keyed for UserCreds {
+    fn get_key() -> &'static str {
+        "usercreds"
+    }
+
+    fn name(&self) -> &str {
+        &self.name
     }
 }
 
@@ -119,7 +185,7 @@ where
         async move {
             let session = req.get_session();
             let auth = if let Some(username) = session.get::<String>(USERNAME)? {
-                if let Some(player) = state.get_player(&username).await {
+                if let Some(player) = state.get::<Player>(&username).await {
                     req.extensions_mut().insert(player);
                     true
                 } else {
@@ -130,7 +196,7 @@ where
                 false
             };
 
-            if !auth && (!["/", "/login"].contains(&req.path())) {
+            if !auth && ["/adventure", "/character_creation"].contains(&req.path()) {
                 return make_redirect(req, "/");
             }
 

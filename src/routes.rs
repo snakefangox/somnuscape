@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     core::{self, AttributeRating},
     player::Player,
-    web_types::{State, USERNAME},
+    web_types::{State, USERNAME, UserCreds},
 };
 
 lazy_static! {
@@ -70,9 +70,9 @@ async fn login(
         );
     }
 
-    if let Some(player) = state.get_player(&form.username).await {
-        let hash = argon2rs::argon2i_simple(&form.password, &player.salt);
-        if player.password == hash {
+    if let Some(user) = state.get::<UserCreds>(&form.username).await {
+        let hash = argon2rs::argon2i_simple(&form.password, &user.salt);
+        if user.password == hash {
             session.insert(USERNAME, &form.username).unwrap();
 
             return HttpResponse::SeeOther()
@@ -92,10 +92,9 @@ async fn login(
         let salt = base64::prelude::BASE64_STANDARD.encode(salt);
         let hash = argon2rs::argon2i_simple(&form.password, &salt);
 
-        state
-            .set_player(Player::new(form.username.clone(), hash, salt))
-            .await;
         session.insert(USERNAME, &form.username).unwrap();
+        state.add_user(form.username.clone(), hash, salt).await;
+
         return HttpResponse::SeeOther()
             .append_header(("Location", "/character_creation"))
             .body(());
@@ -112,7 +111,6 @@ async fn logout(session: Session) -> Result<impl Responder> {
 
 #[get("/character_creation")]
 async fn character_creation(
-    state: web::Data<State>,
     player: Player,
     req: HttpRequest,
 ) -> Result<impl Responder> {
@@ -155,7 +153,7 @@ async fn create_character(
     }
 
     player.finish_character_creation(s.unwrap(), a.unwrap(), i.unwrap());
-    state.set_player(player).await;
+    state.set(&player).await;
 
     return Ok(HttpResponse::SeeOther()
         .append_header(("Location", "/adventure"))
@@ -183,10 +181,9 @@ struct ChatFormData {
 }
 
 #[post("/chat")]
-async fn chat(
-    form: web::Form<ChatFormData>,
-) -> Result<impl Responder> {
-    println!("{}", form.message);
-
-    Ok(HttpResponse::Ok().body(format!("<p>User: {}</p>", form.message)))
+async fn chat(form: web::Form<ChatFormData>) -> Result<impl Responder> {
+    Ok(HttpResponse::Ok().body(format!(
+        "<li class=\"list-group-item bg-secondary-subtle\">User: {}</li>",
+        form.message
+    )))
 }
