@@ -204,11 +204,10 @@ where
                 return make_redirect(req, "/adventure");
             }
 
-            let res = service
+            Ok(service
                 .call(req)
                 .await
-                .map(ServiceResponse::map_into_left_body)?;
-            Ok(res)
+                .map(ServiceResponse::map_into_left_body)?)
         }
         .boxed_local()
     }
