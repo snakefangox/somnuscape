@@ -23,6 +23,7 @@
                 </div>
                 <h4 class="mt-1 text-center user-select-none">Chat</h4>
                 <ul class="overflow-y-scroll list-group list-group-flush" id="chatbox">
+                    {% include "chat_msgs.html" %}
                 </ul>
             </div>
         </div>
@@ -37,7 +38,7 @@
         </div>
         <div class="col-3">
             <form class="shadow d-flex p-1 rounded-bottom border-top bg-secondary-subtle" hx-post="/chat"
-                hx-target="#chatbox" hx-swap="beforeend" hx-on::after-request="this.reset()" autocomplete="off">
+                hx-target="#chatbox" hx-on::after-request="this.reset()" autocomplete="off">
                 <input type="text" class="flex-grow-1 form-control overflow-scroll rounded-end-0" name="message"
                     id="message" placeholder="Speak...">
                 <button type="submit" class="btn btn-primary rounded-start-0" id="send">Send</button>

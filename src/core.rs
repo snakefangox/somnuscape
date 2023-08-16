@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, collections::VecDeque};
 
 use async_openai::{
     config::OpenAIConfig,
@@ -11,19 +11,26 @@ use async_openai::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::{player::Player, web_types::Keyed};
+
 pub const STARTING_POINT_TOTAL: u32 = 12;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Location {
     CharacterCreation,
     Town,
-    Dungeon {
-        area: String,
-        room: String,
-    },
+    Dungeon { area: String, room: String },
 }
 
 impl Location {
+    pub fn name(&self) -> String {
+        match self {
+            Location::CharacterCreation => "character_creation".to_owned(),
+            Location::Town => "town".to_owned(),
+            Location::Dungeon { area, room } => format!("{}:{}", area, room),
+        }
+    }
+
     pub fn is_character_creation(&self) -> bool {
         match self {
             Location::CharacterCreation => true,
@@ -69,7 +76,7 @@ pub struct Attributes {
 }
 
 impl AttributeRating {
-    pub fn from_rank(rank:u32) -> Option<AttributeRating> {
+    pub fn from_rank(rank: u32) -> Option<AttributeRating> {
         match rank {
             1 => Some(AttributeRating::Pathetic),
             2 => Some(AttributeRating::Pitiful),
@@ -222,5 +229,43 @@ impl Conversation {
         );
 
         Ok(msg)
+    }
+}
+
+const CHAT_HISTORY: usize = 30;
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ChatContext {
+    pub name: String,
+    messages: VecDeque<(String, String)>,
+}
+
+impl ChatContext {
+    pub fn new(location: &Location) -> Self {
+        Self {
+            name: location.name(),
+            messages: VecDeque::default(),
+        }
+    }
+
+    pub fn send_msg(&mut self, player: &Player, msg: String) {
+        self.messages.push_back((player.name.to_owned(), msg));
+        if self.messages.len() > CHAT_HISTORY {
+            self.messages.pop_front();
+        }
+    }
+
+    pub fn messages(&self) -> &VecDeque<(String, String)> {
+        &self.messages
+    }
+}
+
+impl Keyed for ChatContext {
+    fn get_key() -> &'static str {
+        "chats"
+    }
+
+    fn name(&self) -> &str {
+        &self.name
     }
 }

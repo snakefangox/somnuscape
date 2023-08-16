@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use actix_session::Session;
 use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder, Result};
 use askama_actix::Template;
@@ -8,7 +10,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    core::{self, AttributeRating},
+    core::{self, AttributeRating, ChatContext},
     player::Player,
     web_types::{State, UserCreds, USERNAME},
 };
@@ -21,19 +23,6 @@ lazy_static! {
 #[template(path = "index.html")]
 struct Index<'a> {
     error: &'a str,
-}
-
-#[derive(Template)]
-#[template(path = "character_creation.html")]
-struct CharacterCreation<'a> {
-    name: &'a str,
-}
-
-#[derive(Template)]
-#[template(path = "adventure.html")]
-struct Adventure<'a> {
-    name: &'a str,
-    p: &'a Player,
 }
 
 #[get("/")]
@@ -110,6 +99,12 @@ async fn logout(session: Session) -> Result<impl Responder> {
         .body(()))
 }
 
+#[derive(Template)]
+#[template(path = "character_creation.html")]
+struct CharacterCreation<'a> {
+    name: &'a str,
+}
+
 #[get("/character_creation")]
 async fn character_creation(player: Player, req: HttpRequest) -> Result<impl Responder> {
     if player.creation_complete() {
@@ -158,6 +153,14 @@ async fn create_character(
         .body(()));
 }
 
+#[derive(Template)]
+#[template(path = "adventure.html")]
+struct Adventure<'a> {
+    name: &'a str,
+    p: &'a Player,
+    messages: &'a VecDeque<(String, String)>,
+}
+
 #[get("/adventure")]
 async fn adventure(
     state: web::Data<State>,
@@ -170,9 +173,15 @@ async fn adventure(
             .body(()));
     }
 
+    let chat_ctx: ChatContext = state
+        .get(&player.location.name())
+        .await
+        .unwrap_or_else(|| ChatContext::new(&player.location));
+
     return Ok(Adventure {
         name: &player.name,
         p: &player,
+        messages: chat_ctx.messages(),
     }
     .respond_to(&req));
 }
@@ -182,10 +191,30 @@ struct ChatFormData {
     message: String,
 }
 
+#[derive(Template)]
+#[template(path = "chat_msgs.html")]
+struct ChatMsgs<'a> {
+    messages: &'a VecDeque<(String, String)>,
+}
+
 #[post("/chat")]
-async fn chat(form: web::Form<ChatFormData>) -> Result<impl Responder> {
-    Ok(HttpResponse::Ok().body(format!(
-        "<li class=\"list-group-item bg-secondary-subtle\">User: {}</li>",
-        form.message
-    )))
+async fn chat(
+    mut form: web::Form<ChatFormData>,
+    state: web::Data<State>,
+    player: Player,
+    req: HttpRequest,
+) -> Result<impl Responder> {
+    let location = &player.location;
+    let mut chat_ctx: ChatContext = state
+        .get(&location.name())
+        .await
+        .unwrap_or_else(|| ChatContext::new(location));
+
+    chat_ctx.send_msg(&player, std::mem::take(&mut form.message));
+    state.set(&chat_ctx).await;
+
+    Ok(ChatMsgs {
+        messages: chat_ctx.messages(),
+    }
+    .respond_to(&req))
 }
