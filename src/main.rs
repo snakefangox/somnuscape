@@ -6,13 +6,11 @@ mod routes;
 mod web_types;
 mod worldbuilding;
 
-
 use actix_session::{storage::CookieSessionStore, SessionMiddleware};
 use actix_web::{cookie::Key, web, App, HttpServer};
 use base64::Engine;
 use dotenvy::dotenv;
 use web_types::{PlayerAuthTransform, State};
-
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
