@@ -1,0 +1,6 @@
+{% for input in inputs %}
+{% match input %}
+{% when ActionInput::Button with (name) %}
+<button type="button" class="btn btn-primary mx-1" hx-get="/action/{{ name|lower }}" hx-target="#actions">{{ name }}</button>
+{% endmatch %}
+{% endfor %}

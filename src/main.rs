@@ -1,3 +1,4 @@
+mod action;
 mod combat;
 mod core;
 mod dungeon;
@@ -37,6 +38,7 @@ async fn main() -> anyhow::Result<()> {
             .service(routes::create_character)
             .service(routes::adventure)
             .service(routes::chat)
+            .service(routes::action)
             .service(actix_files::Files::new("/assets", "./assets"))
     })
     .bind(("0.0.0.0", 8080))?

@@ -159,6 +159,7 @@ struct Adventure<'a> {
     name: &'a str,
     p: &'a Player,
     messages: &'a VecDeque<(String, String)>,
+    actions: &'a str,
 }
 
 #[get("/adventure")]
@@ -182,6 +183,7 @@ async fn adventure(
         name: &player.name,
         p: &player,
         messages: chat_ctx.messages(),
+        actions: &crate::action::get_active_actions(&player),
     }
     .respond_to(&req));
 }
@@ -192,7 +194,7 @@ struct ChatFormData {
 }
 
 #[derive(Template)]
-#[template(path = "chat_msgs.html")]
+#[template(path = "elements/chatbox.html")]
 struct ChatMsgs<'a> {
     messages: &'a VecDeque<(String, String)>,
 }
@@ -217,4 +219,16 @@ async fn chat(
         messages: chat_ctx.messages(),
     }
     .respond_to(&req))
+}
+
+#[post("/action/{action_name}")]
+async fn action(
+    action: web::Path<String>,
+    state: web::Data<State>,
+    player: Player,
+    req: HttpRequest,
+) -> Result<impl Responder> {
+    Ok(crate::action::get_input_menu(&player, &state, &action)
+        .await
+        .respond_to(&req))
 }

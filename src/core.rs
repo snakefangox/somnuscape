@@ -37,6 +37,13 @@ impl Location {
             _ => false,
         }
     }
+
+    pub fn is_town(&self) -> bool {
+        match self {
+            Location::Town => true,
+            _ => false,
+        }
+    }
 }
 
 impl Default for Location {

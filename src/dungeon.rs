@@ -2,9 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    web_types::Keyed, core::Attributes,
-};
+use crate::{core::Attributes, web_types::Keyed};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Dungeon {
@@ -66,6 +64,10 @@ impl Dungeon {
 
         Ok((dungeon, enemy_types))
     }
+
+    pub fn name(&self) -> &str {
+        self.name.as_ref()
+    }
 }
 
 impl Keyed for Dungeon {
@@ -106,7 +108,7 @@ impl Direction {
             Direction::South => Self::North,
             Direction::West => Self::East,
             Direction::Up => Self::Down,
-      Direction::Down => Self::Up,
+            Direction::Down => Self::Up,
         }
     }
 }
