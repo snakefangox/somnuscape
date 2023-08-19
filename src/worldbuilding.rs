@@ -65,7 +65,7 @@ async fn generate_names(n: usize, name_type: &str) -> anyhow::Result<Vec<String>
 
 pub async fn get_creature(state: &State, name: &str) -> anyhow::Result<Creature> {
     if state.has::<Creature>(name).await {
-        Ok(state.get(name).await.unwrap())
+        Ok(state.grab(name).await)
     } else {
         let result = serde_json::from_str::<Creature>(
             &Conversation::prime(include_str!("../primers/stats.yaml"))

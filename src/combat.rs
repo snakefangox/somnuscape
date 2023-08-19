@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{core::{Location, Attribute}, core::Attributes};
+use crate::{
+    core::Attributes,
+    core::{Attribute, Location},
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Combat {
@@ -34,11 +37,7 @@ impl Combat {
         }
     }
 
-    pub fn take_turn(&mut self) {
-        
-    }
+    pub fn take_turn(&mut self) {}
 }
 
-impl FighterRef {
-    
-}
+impl FighterRef {}

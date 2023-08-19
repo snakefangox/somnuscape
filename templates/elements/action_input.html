@@ -1,6 +1,8 @@
+
+<button type="button" class="btn btn-outline-secondary m-1" hx-get="/actions" hx-target="#actions">Cancel</button>
 {% for input in inputs %}
 {% match input %}
 {% when ActionInput::Button with (name) %}
-<button type="button" class="btn btn-primary mx-1" hx-get="/action/{{ name|lower }}" hx-target="#actions">{{ name }}</button>
+<button type="button" class="btn btn-primary m-1" hx-post="/perform/{{ action_name }}/{{ name }}" hx-target="#actions">{{ name }}</button>
 {% endmatch %}
 {% endfor %}

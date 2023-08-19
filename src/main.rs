@@ -38,7 +38,9 @@ async fn main() -> anyhow::Result<()> {
             .service(routes::create_character)
             .service(routes::adventure)
             .service(routes::chat)
+            .service(routes::actions)
             .service(routes::action)
+            .service(routes::perform_action)
             .service(actix_files::Files::new("/assets", "./assets"))
     })
     .bind(("0.0.0.0", 8080))?

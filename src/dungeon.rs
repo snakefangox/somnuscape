@@ -49,7 +49,6 @@ impl Dungeon {
             .cloned()
             .collect();
 
-        // TODO: Gotta be a better way than this...
         let rooms: Vec<HashMap<Direction, String>> = dungeon
             .rooms
             .iter()
@@ -65,8 +64,8 @@ impl Dungeon {
         Ok((dungeon, enemy_types))
     }
 
-    pub fn name(&self) -> &str {
-        self.name.as_ref()
+    pub fn room(&self, name:&str) -> Option<&Room> {
+        self.rooms.iter().find(|r| r.name == name)
     }
 }
 
@@ -109,6 +108,18 @@ impl Direction {
             Direction::West => Self::East,
             Direction::Up => Self::Down,
             Direction::Down => Self::Up,
+        }
+    }
+
+    pub fn from_str(name: &str) -> Direction {
+        match name {
+            "North" => Direction::North,
+            "East" => Direction::East,
+            "South" => Direction::South,
+            "West" => Direction::West,
+            "Up" => Direction::Up,
+            "Down" => Direction::Down,
+            _ => Direction::North,
         }
     }
 }

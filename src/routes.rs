@@ -183,7 +183,7 @@ async fn adventure(
         name: &player.name,
         p: &player,
         messages: chat_ctx.messages(),
-        actions: &crate::action::get_active_actions(&player),
+        actions: &crate::action::get_active_actions(&player, &state).await,
     }
     .respond_to(&req));
 }
@@ -221,14 +221,33 @@ async fn chat(
     .respond_to(&req))
 }
 
+#[get("/actions")]
+async fn actions(player: Player, state: web::Data<State>, req: HttpRequest) -> Result<impl Responder> {
+    Ok(crate::action::get_active_actions(&player, &state).await.respond_to(&req))
+}
+
 #[post("/action/{action_name}")]
 async fn action(
-    action: web::Path<String>,
+    action_name: web::Path<String>,
     state: web::Data<State>,
     player: Player,
     req: HttpRequest,
 ) -> Result<impl Responder> {
-    Ok(crate::action::get_input_menu(&player, &state, &action)
+    Ok(crate::action::get_input_menu(&player, &state, &action_name)
         .await
         .respond_to(&req))
+}
+
+#[post("/perform/{action_name}/{option}")]
+async fn perform_action(
+    parms: web::Path<(String, String)>,
+    state: web::Data<State>,
+    mut player: Player,
+    req: HttpRequest,
+) -> Result<impl Responder> {
+    Ok(
+        crate::action::perform_action(&mut player, &state, &parms.0, &parms.1)
+            .await
+            .respond_to(&req),
+    )
 }

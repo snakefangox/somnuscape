@@ -57,6 +57,13 @@ impl State {
         serde_json::from_str::<T>(&json).ok()
     }
 
+    pub async fn grab<T>(&self, name: &str) -> T
+    where
+        T: for<'a> Deserialize<'a> + Keyed,
+    {
+        self.get::<T>(name).await.unwrap()
+    }
+
     pub async fn set<T>(&self, val: &T)
     where
         T: Serialize + Keyed,

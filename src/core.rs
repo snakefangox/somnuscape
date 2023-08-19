@@ -31,6 +31,27 @@ impl Location {
         }
     }
 
+    pub fn area(&self) -> String {
+        match self {
+            Location::CharacterCreation | Location::Town => self.name(),
+            Location::Dungeon { area, room: _ } => area.to_owned(),
+        }
+    }
+
+    pub fn room(&self) -> String {
+        match self {
+            Location::CharacterCreation | Location::Town => self.name(),
+            Location::Dungeon { area: _, room } => room.to_owned(),
+        }
+    }
+
+    pub fn move_room(&mut self, new_room: &str) {
+        match self {
+            Location::CharacterCreation | Location::Town => (),
+            Location::Dungeon { area: _, room } => *room = new_room.to_owned(),
+        }
+    }
+
     pub fn is_character_creation(&self) -> bool {
         match self {
             Location::CharacterCreation => true,
@@ -41,6 +62,13 @@ impl Location {
     pub fn is_town(&self) -> bool {
         match self {
             Location::Town => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_dungeon(&self) -> bool {
+        match self {
+            Location::Dungeon { area: _, room: _ } => true,
             _ => false,
         }
     }
@@ -158,13 +186,6 @@ pub struct Conversation {
 }
 
 impl Conversation {
-    pub fn new(system_prompt: &str) -> Self {
-        Self {
-            client: Client::new(),
-            messages: vec![(Role::System, system_prompt.to_string())],
-        }
-    }
-
     /// Start a conversation with some primer text already loaded
     /// Accepts a string seperated by lines of --- into messages
     /// The first message is the system message, then it alternates: User, Assistant
