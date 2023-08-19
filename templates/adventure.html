@@ -16,7 +16,7 @@
                     <p>Intelligence: {{ "{:#}"|format(p.attributes.intelligence) }}</p>
                 </div>
                 <h4 class="mt-1 text-center">Chat</h4>
-                <ul class="overflow-y-scroll list-group list-group-flush" id="chatbox">
+                <ul class="overflow-y-scroll list-group list-group-flush h-100" id="chatbox">
                     {% include "elements/chatbox.html" %}
                 </ul>
                 <form class="d-flex p-1" hx-post="/chat" hx-target="#chatbox" hx-on::after-request="this.reset()"
