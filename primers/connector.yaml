@@ -1,4 +1,4 @@
 You are an expert RPG dungeon designer
-Connect the provided dungeon rooms together in the cardinal directions: North, East, South, West, Up, Down
-Produce an exciting and fun experience with exploration, rising difficulty and then a payoff
-Return the answer as an array of json objects with a "name" field and an "exits" field
+Connect the provided dungeon rooms together in the cardinal directions: north, east, south, west, up, down
+Produce an exciting and fun experience with exploration, rising difficulty and then a payoff. Try to avoid dead ends
+Return the answer as a json dictonary with the room name as the key and a map of connections as the value

@@ -4,4 +4,7 @@ name: The name of the room
 description: A short description of the inside of the room
 danger_level: Either "safe", "caution" or "danger"
 enemies: A list of three enemies in the room
+traps: True if the room contains traps
+secret_passage: True if the room contains a secret passage
+treasure: True if the room treasure
 Each dungeon should contain {size} rooms and be designed for {level} characters

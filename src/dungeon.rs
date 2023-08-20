@@ -2,7 +2,10 @@ use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{core::{Attributes, Conversation}, web_types::Keyed};
+use crate::{
+    core::{Attributes, Conversation},
+    web_types::Keyed,
+};
 
 #[derive(Debug, Deserialize, Serialize, Default)]
 #[serde(default)]
@@ -21,8 +24,26 @@ pub struct Room {
     pub description: String,
     pub danger_level: DangerLevel,
     pub enemies: Vec<String>,
+    pub traps: bool,
+    pub secret_passage: bool,
+    pub treasure: bool,
     #[serde(default)]
     pub connections: HashMap<Direction, String>,
+}
+
+impl Room {
+    fn make_outside() -> Self {
+        Self {
+            name: "Outside".to_owned(),
+            description: "A safe space just outside the dungeon".to_owned(),
+            danger_level: DangerLevel::Safe,
+            enemies: Vec::new(),
+            traps: false,
+            secret_passage: false,
+            treasure: false,
+            connections: HashMap::new(),
+        }
+    }
 }
 
 impl Keyed for Dungeon {
@@ -136,12 +157,6 @@ impl Direction {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-struct Connector {
-    name: String,
-    exits: HashMap<Direction, String>,
-}
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Creature {
     #[serde(rename = "creature_name")]
@@ -170,15 +185,42 @@ impl DungeonGenerator {
         let prompt = include_str!("../primers/rooms.yaml")
             .replace("{size}", size.room_number())
             .replace("{level}", difficulty.character_level());
-        let mut con = crate::core::Conversation::prime(&prompt);
-        let json = con.say(&name).await?.1;
+        let mut rooms_con = Conversation::prime(&prompt);
+        let mut connector_con = Conversation::prime(include_str!("../primers/connector.yaml"));
+        let json = rooms_con.say(&name).await?.1;
 
         let mut result = serde_json::from_str::<Vec<Room>>(&json);
         if result.is_err() {
             result = serde_json::from_str::<Dungeon>(&json).map(|d| d.rooms);
         }
 
-        let rooms: Vec<Room> = result?;
+        let mut rooms: Vec<Room> = result?;
+        rooms.insert(0, Room::make_outside());
+
+        let room_names: Vec<String> = rooms.iter().map(|r| &r.name).cloned().collect();
+        let room_name_set: HashSet<&String> = rooms.iter().map(|r| &r.name).collect();
+
+        if room_names.len() != room_name_set.len() {
+            anyhow::bail!("Dungeon contained duplicate room names");
+        }
+
+        let connector_json = connector_con
+            .say(&serde_json::to_string(&room_names)?)
+            .await?
+            .1;
+        let connections: HashMap<String, HashMap<Direction, String>> =
+            serde_json::from_str(&connector_json)?;
+
+        for room in &mut rooms {
+            if let Some(c) = connections.get(&room.name) {
+                if c.values().all(|r| room_names.contains(&r)) {
+                    room.connections = c.clone();
+                } else {
+                    anyhow::bail!("Room in connection map did not exist");
+                }
+            }
+        }
+
         let enemy_types = rooms.iter().flat_map(|r| &r.enemies).cloned().collect();
 
         let dungeon = Dungeon {
@@ -196,16 +238,14 @@ impl DungeonGenerator {
 #[tokio::test]
 async fn test_dungeon_generation() {
     dotenvy::dotenv().expect(".env file not found");
-    let dungeon = DungeonGenerator("Shadowspire".to_owned(), DungeonLevel::Low, DungeonSize::Medium).generate().await.unwrap();
+    let dungeon = DungeonGenerator(
+        "Shadowspire Dungeon".to_owned(),
+        DungeonLevel::Low,
+        DungeonSize::Huge,
+    )
+    .generate()
+    .await
+    .unwrap();
     println!("{:#?}", dungeon);
-    assert_eq!(dungeon.0.rooms.len(), 10);
-}
-
-#[tokio::test]
-async fn test_dungeon_connection() {
-    dotenvy::dotenv().expect(".env file not found");
-    let mut con = Conversation::prime(include_str!("../primers/connector.yaml"));
-    let connected = con.query(r#"["Entrance Hall", "Crumbled Library", "Spider's Den", "Mossy Cellar", "Torture Chamber", "Collapsed Passageway", "Altar of Darkness", "Treasure Vault", "Chasm Bridge", "Throne Room"]"#).await.unwrap();
-    let connections: Vec<Connector> = serde_json::from_str(&connected.1).unwrap();
-    println!("{:#?}", connections);
+    assert_eq!(dungeon.0.rooms.len(), 21);
 }
