@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{core::Attributes, web_types::Keyed};
+use crate::{core::{Attributes, Conversation}, web_types::Keyed};
 
 #[derive(Debug, Deserialize, Serialize, Default)]
 #[serde(default)]
@@ -23,6 +23,16 @@ pub struct Room {
     pub enemies: Vec<String>,
     #[serde(default)]
     pub connections: HashMap<Direction, String>,
+}
+
+impl Keyed for Dungeon {
+    fn get_key() -> &'static str {
+        "dungeons"
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Copy)]
@@ -89,26 +99,9 @@ impl Default for DungeonLevel {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Creature {
-    #[serde(rename = "creature_name")]
-    pub name: String,
-    pub attributes: Attributes,
-}
-
 impl Dungeon {
     pub fn room(&self, name: &str) -> Option<&Room> {
         self.rooms.iter().find(|r| r.name == name)
-    }
-}
-
-impl Keyed for Dungeon {
-    fn get_key() -> &'static str {
-        "dungeons"
-    }
-
-    fn name(&self) -> &str {
-        &self.name
     }
 }
 
@@ -130,17 +123,6 @@ impl Default for Direction {
 }
 
 impl Direction {
-    pub fn inverse(&self) -> Direction {
-        match self {
-            Direction::North => Self::South,
-            Direction::East => Self::West,
-            Direction::South => Self::North,
-            Direction::West => Self::East,
-            Direction::Up => Self::Down,
-            Direction::Down => Self::Up,
-        }
-    }
-
     pub fn from_str(name: &str) -> Direction {
         match name {
             "North" => Direction::North,
@@ -152,6 +134,19 @@ impl Direction {
             _ => Direction::North,
         }
     }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct Connector {
+    name: String,
+    exits: HashMap<Direction, String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct Creature {
+    #[serde(rename = "creature_name")]
+    pub name: String,
+    pub attributes: Attributes,
 }
 
 impl Keyed for Creature {
@@ -199,9 +194,18 @@ impl DungeonGenerator {
 }
 
 #[tokio::test]
-async fn test_dungeon_conversation() {
+async fn test_dungeon_generation() {
     dotenvy::dotenv().expect(".env file not found");
     let dungeon = DungeonGenerator("Shadowspire".to_owned(), DungeonLevel::Low, DungeonSize::Medium).generate().await.unwrap();
     println!("{:#?}", dungeon);
     assert_eq!(dungeon.0.rooms.len(), 10);
+}
+
+#[tokio::test]
+async fn test_dungeon_connection() {
+    dotenvy::dotenv().expect(".env file not found");
+    let mut con = Conversation::prime(include_str!("../primers/connector.yaml"));
+    let connected = con.query(r#"["Entrance Hall", "Crumbled Library", "Spider's Den", "Mossy Cellar", "Torture Chamber", "Collapsed Passageway", "Altar of Darkness", "Treasure Vault", "Chasm Bridge", "Throne Room"]"#).await.unwrap();
+    let connections: Vec<Connector> = serde_json::from_str(&connected.1).unwrap();
+    println!("{:#?}", connections);
 }

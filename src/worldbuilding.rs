@@ -1,5 +1,7 @@
 use std::{collections::HashSet, time::Duration};
 
+use rand::seq::{SliceRandom, IteratorRandom};
+
 use crate::{
     core::Conversation,
     dungeon::{Creature, Dungeon, DungeonGenerator},
@@ -46,24 +48,38 @@ async fn generate_dungeons(state: &State) -> anyhow::Result<()> {
 }
 
 async fn generate_names(n: usize, name_type: &str) -> anyhow::Result<Vec<String>> {
-    const SLACK: usize = 5;
+    const SEED_WORDS: [&'static str; 18] = [
+        "dragon", "elf", "dwarf", "undead", "astral", "eye", "eldritch", "sanity", "boiling",
+        "ocean", "holy", "cursed", "ancient", "frozen", "gate", "hold", "spirit", "temporal",
+    ];
 
+    let mut names = Vec::new();
     let mut name_conv = Conversation::prime(include_str!("../primers/names.yaml"));
-    name_conv
-        .say(&format!("{} fantasy {} names", n + SLACK, name_type))
-        .await?;
+    name_conv.temprature(1.0);
 
-    let best_names = name_conv
-        .say("Order them from most interesting and unique to least interesting and unique")
-        .await?
-        .1;
+    let mut e = SEED_WORDS.choose_multiple(&mut rand::thread_rng(), 3);
+    let seed = format!(
+        "{:?} {:?} {:?}",
+        e.next().unwrap(),
+        e.next().unwrap(),
+        e.next().unwrap()
+    );
 
-    let r = regex::Regex::new(r"(?m)^[0-9]+\. (.*)$")?;
-    let names: Vec<String> = r
-        .captures_iter(&best_names)
-        .filter_map(|c| c.get(1).map(|c| c.as_str().to_owned()))
-        .take(n)
-        .collect();
+    for _ in 0..(n / 3) + 1 {
+        let raw_names = name_conv
+            .query(&format!("seed: {seed}\nFive fantasy {} names", name_type))
+            .await?
+            .1;
+
+        let r = regex::Regex::new(r"(?m)^[0-9]+\. (.*)$")?;
+        let gen_names: Vec<&str> = r
+            .captures_iter(&raw_names)
+            .filter_map(|c| c.get(1).map(|c| c.as_str()))
+            .choose_multiple(&mut rand::thread_rng(), 3);
+
+        names.extend(gen_names.iter().map(|s| s.to_string()));
+    }
+
     Ok(names)
 }
 
@@ -81,4 +97,12 @@ pub async fn get_creature(state: &State, name: &str) -> anyhow::Result<Creature>
 
         Ok(result)
     }
+}
+
+#[tokio::test]
+async fn test_names() {
+    dotenvy::dotenv().unwrap();
+    let names = generate_names(10, "dungeons").await.unwrap();
+
+    println!("{:#?}", names)
 }

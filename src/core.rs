@@ -1,4 +1,4 @@
-use std::{fmt::Display, collections::VecDeque};
+use std::{collections::VecDeque, fmt::Display};
 
 use async_openai::{
     config::OpenAIConfig,
@@ -181,6 +181,7 @@ const CHAT_GPT: &str = "gpt-3.5-turbo";
 
 #[derive(Debug, Clone)]
 pub struct Conversation {
+    temprature: f32,
     messages: Vec<Message>,
     client: Client<OpenAIConfig>,
 }
@@ -206,7 +207,13 @@ impl Conversation {
         Self {
             client: Client::new(),
             messages: msgs,
+            temprature: 0.,
         }
+    }
+
+    /// Set the model temprature
+    pub fn temprature(&mut self, temp: f32) {
+        self.temprature = temp;
     }
 
     /// Add a user message to the conversation
@@ -227,6 +234,7 @@ impl Conversation {
     pub async fn say(&mut self, msg: &str) -> Result<Message, OpenAIError> {
         self.add_message(msg);
         let answer = self.send().await?;
+        self.messages.push(answer.clone());
         Ok(answer)
     }
 
@@ -246,6 +254,7 @@ impl Conversation {
 
         let chat_req = CreateChatCompletionRequestArgs::default()
             .model(CHAT_GPT)
+            .temperature(self.temprature)
             .messages(messages)
             .build()?;
 
