@@ -1,4 +1,10 @@
-use crate::{core::Location, dungeon::{Dungeon, Direction}, player::Player, web_types::State};
+use crate::{
+    core::Location,
+    dungeon::{Direction, Dungeon},
+    player::Player,
+    web_types::{State, WebsocketMap, LogMessage},
+};
+use actix_web::web;
 use askama::Template;
 
 pub enum ActionInput {
@@ -44,7 +50,7 @@ impl Action {
         match self {
             Action::Embark => player.location.is_town(),
             Action::Move => player.location.is_dungeon(),
-            Action::Return => player.location.is_dungeon() && dungeon.unwrap().rooms.first().unwrap().name == player.location.room(),
+            Action::Return => player.location.is_dungeon() && player.location.room() == "Outside",
         }
     }
 
@@ -71,7 +77,12 @@ impl Action {
         }
     }
 
-    pub async fn perform_action(&self, player: &mut Player, state: &State, option_name: &str) {
+    pub async fn perform_action(
+        &self,
+        player: &mut Player,
+        state: &State,
+        option_name: &str,
+    ) -> Option<String> {
         match self {
             Action::Embark => {
                 if let Some(dungeon) = state.get::<Dungeon>(option_name).await {
@@ -79,18 +90,32 @@ impl Action {
                         area: option_name.to_owned(),
                         room: dungeon.rooms.first().unwrap().name.to_owned(),
                     };
+                    Some(format!("After a long day of travel, you arrive outside the entrance to {option_name}"))
+                } else {
+                    None
                 }
             }
             Action::Move => {
                 let dungeon = state.grab::<Dungeon>(&&player.location.area()).await;
                 let room = dungeon.room(&player.location.room()).unwrap();
-                let dir = option_name.split(":").next().map(Direction::from_str).unwrap_or_default();
+                let dir = option_name
+                    .split(":")
+                    .next()
+                    .map(Direction::from_str)
+                    .unwrap_or_default();
                 if room.connections.contains_key(&dir) {
-                    player.location.move_room(&room.connections[&dir]);
+                    let new_name = &room.connections[&dir];
+                    player.location.move_room(new_name);
+
+                    let new_room = dungeon.room(&player.location.room()).unwrap();
+                    Some(format!("Moved to {new_name}\n{}", new_room.description))
+                } else {
+                    None
                 }
             }
             Action::Return => {
                 player.location = Location::Town;
+                Some(format!("You stow your gear and trek back to town"))
             }
         }
     }
@@ -132,6 +157,7 @@ pub async fn perform_action(
     state: &State,
     action_name: &str,
     option_name: &str,
+    ws_map: web::Data<WebsocketMap>,
 ) -> String {
     let action = Action::actions().iter().find(|a| a.name() == action_name);
     if action.is_none() {
@@ -139,7 +165,15 @@ pub async fn perform_action(
     }
 
     let action = action.unwrap();
-    action.perform_action(player, state, option_name).await;
+    let response = action.perform_action(player, state, option_name).await;
+    let ws_map = ws_map.data.lock().unwrap();
+    let ws = ws_map.get(&player.name);
+
+    if ws.is_some() && response.is_some() {
+        if let Some(ws) = ws.unwrap().upgrade() {
+            ws.do_send(LogMessage(response.unwrap()));
+        }
+    }
     state.set(player).await;
 
     get_active_actions(player, state).await

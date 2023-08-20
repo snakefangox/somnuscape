@@ -4,7 +4,7 @@ use rand::seq::{SliceRandom, IteratorRandom};
 
 use crate::{
     core::Conversation,
-    dungeon::{Creature, Dungeon, DungeonGenerator},
+    dungeon::{Creature, Dungeon, DungeonGenerator, DungeonLevel, DungeonSize},
     web_types::State,
 };
 
@@ -18,22 +18,22 @@ pub async fn run() {
 
     loop {
         let dungeons: HashSet<String> = state.list::<Dungeon>().await;
-        if dungeons.len() < 10 {
-            let _ = generate_dungeons(&state).await;
+        if dungeons.len() < 3 {
+            let _ = generate_dungeons(&state, 3).await;
         }
 
         interval.tick().await;
     }
 }
 
-async fn generate_dungeons(state: &State) -> anyhow::Result<()> {
-    let names = generate_names(10, "dungeon").await?;
+async fn generate_dungeons(state: &State, n: usize) -> anyhow::Result<()> {
+    let names = generate_names(n, "dungeon").await?;
 
     for name in names {
         let (dungeon, creatures) = DungeonGenerator(
             name,
-            crate::dungeon::DungeonLevel::Medium,
-            crate::dungeon::DungeonSize::Medium,
+            DungeonLevel::Low,
+            DungeonSize::Medium,
         )
         .generate()
         .await?;

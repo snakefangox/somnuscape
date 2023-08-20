@@ -19,7 +19,7 @@
                 <ul class="overflow-y-scroll list-group list-group-flush h-100" id="chatbox">
                     {% include "elements/chatbox.html" %}
                 </ul>
-                <form class="d-flex p-1" hx-post="/chat" hx-target="#chatbox" hx-on::after-request="this.reset()"
+                <form class="d-flex p-1" hx-post="/chat" hx-target="#chatbox" hx-on::after-request="this.reset()" hx-swap="innerHTML scroll:bottom"
                     autocomplete="off">
                     <input type="text" class="flex-grow-1 form-control overflow-scroll rounded-end-0" name="message"
                         id="message" placeholder="Speak...">
@@ -28,7 +28,7 @@
             </div>
         </div>
         <div class="col d-flex flex-column" style="height: calc(100vh - 60px);">
-            <div id="log" class="flex-grow-1 overflow-y-scroll"></div>
+            <ul id="log" class="flex-grow-1 overflow-y-scroll" hx-ws="connect:/ws"></ul>
             <div class="p-1 border-top" id="actions">
                 {{ actions|safe }}
             </div>

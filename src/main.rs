@@ -11,7 +11,7 @@ use actix_session::{storage::CookieSessionStore, SessionMiddleware};
 use actix_web::{cookie::Key, web, App, HttpServer};
 use base64::Engine;
 use dotenvy::dotenv;
-use web_types::{PlayerAuthTransform, State};
+use web_types::{PlayerAuthTransform, State, WebsocketMap};
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
@@ -22,9 +22,12 @@ async fn main() -> anyhow::Result<()> {
 
     tokio::spawn(worldbuilding::run());
 
+    let ws_map = web::Data::new(WebsocketMap::default());
+
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(State::new()))
+            .app_data(ws_map.clone())
             .wrap(PlayerAuthTransform)
             .wrap(
                 SessionMiddleware::builder(CookieSessionStore::default(), Key::from(&session_key))
@@ -41,6 +44,7 @@ async fn main() -> anyhow::Result<()> {
             .service(routes::actions)
             .service(routes::action)
             .service(routes::perform_action)
+            .service(routes::ws)
             .service(actix_files::Files::new("/assets", "./assets"))
     })
     .bind(("0.0.0.0", 8080))?

@@ -9,7 +9,7 @@ pub struct Player {
     pub health: u32,
     pub attributes: Attributes,
 }
- 
+
 impl Player {
     pub fn new(name: String) -> Self {
         Self {

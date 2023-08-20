@@ -1,15 +1,20 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     future::{ready, Ready},
     rc::Rc,
+    sync::Mutex,
+    time::{Duration, Instant},
 };
 
+use actix::{Actor, ActorContext, AsyncContext, Handler, Message, StreamHandler, WeakAddr};
 use actix_session::SessionExt;
 use actix_web::{
     body::EitherBody,
     dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
     Error, FromRequest, HttpMessage, HttpResponse,
 };
+use actix_web_actors::ws;
+use askama_actix::Template;
 use futures::{future::LocalBoxFuture, FutureExt};
 use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
@@ -230,4 +235,79 @@ fn make_redirect<B>(
             .finish()
             .map_into_right_body(),
     ))
+}
+
+pub struct LogWebsocket {
+    heartbeat: Instant,
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct LogMessage(pub String);
+
+#[derive(Template)]
+#[template(path = "elements/log.html")]
+struct Log<'a> {
+    entry: &'a str,
+}
+
+const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
+const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
+
+impl LogWebsocket {
+    pub fn new() -> Self {
+        LogWebsocket {
+            heartbeat: Instant::now(),
+        }
+    }
+
+    fn heartbeat(&self, ctx: &mut <Self as Actor>::Context) {
+        ctx.run_interval(HEARTBEAT_INTERVAL, |act, ctx| {
+            if Instant::now().duration_since(act.heartbeat) > CLIENT_TIMEOUT {
+                ctx.stop();
+                return;
+            }
+
+            ctx.ping(b"");
+        });
+    }
+}
+
+impl Actor for LogWebsocket {
+    type Context = ws::WebsocketContext<Self>;
+
+    fn started(&mut self, ctx: &mut Self::Context) {
+        self.heartbeat(ctx);
+    }
+}
+
+impl Handler<LogMessage> for LogWebsocket {
+    type Result = ();
+
+    fn handle(&mut self, msg: LogMessage, ctx: &mut Self::Context) {
+        ctx.text(Log {entry: &msg.0 }.render().unwrap());
+    }
+}
+
+impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for LogWebsocket {
+    fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
+        match msg {
+            Ok(ws::Message::Ping(msg)) => {
+                ctx.pong(&msg);
+                self.heartbeat = Instant::now();
+            }
+            Ok(ws::Message::Pong(_)) => self.heartbeat = Instant::now(),
+            Ok(ws::Message::Text(text)) => ctx.text(text),
+            Ok(ws::Message::Close(reason)) => {
+                ctx.close(reason);
+                ctx.stop();
+            }
+            _ => (),
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct WebsocketMap {
+    pub data: Mutex<HashMap<String, WeakAddr<LogWebsocket>>>,
 }

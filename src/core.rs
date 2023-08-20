@@ -52,6 +52,14 @@ impl Location {
         }
     }
 
+    pub fn describe(&self) -> String {
+        match self {
+            Location::CharacterCreation => "You are a sea of possibilities, not yet complete".to_owned(),
+            Location::Town => "You are safely back at town".to_owned(),
+            Location::Dungeon { area, room } => format!("You are in {area}, standing in {room}"),
+        }
+    }
+
     pub fn is_character_creation(&self) -> bool {
         match self {
             Location::CharacterCreation => true,

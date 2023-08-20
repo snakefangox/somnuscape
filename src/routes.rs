@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 
 use actix_session::Session;
 use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder, Result};
+use actix_web_actors::ws::WsResponseBuilder;
 use askama_actix::Template;
 use base64::Engine;
 use lazy_static::lazy_static;
@@ -12,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     core::{self, AttributeRating, ChatContext},
     player::Player,
-    web_types::{State, UserCreds, USERNAME},
+    web_types::{LogWebsocket, State, UserCreds, WebsocketMap, USERNAME, LogMessage},
 };
 
 lazy_static! {
@@ -222,8 +223,14 @@ async fn chat(
 }
 
 #[get("/actions")]
-async fn actions(player: Player, state: web::Data<State>, req: HttpRequest) -> Result<impl Responder> {
-    Ok(crate::action::get_active_actions(&player, &state).await.respond_to(&req))
+async fn actions(
+    player: Player,
+    state: web::Data<State>,
+    req: HttpRequest,
+) -> Result<impl Responder> {
+    Ok(crate::action::get_active_actions(&player, &state)
+        .await
+        .respond_to(&req))
 }
 
 #[post("/action/{action_name}")]
@@ -244,10 +251,26 @@ async fn perform_action(
     state: web::Data<State>,
     mut player: Player,
     req: HttpRequest,
+    ws_map: web::Data<WebsocketMap>,
 ) -> Result<impl Responder> {
     Ok(
-        crate::action::perform_action(&mut player, &state, &parms.0, &parms.1)
+        crate::action::perform_action(&mut player, &state, &parms.0, &parms.1, ws_map)
             .await
             .respond_to(&req),
     )
+}
+
+#[get("/ws")]
+async fn ws(
+    req: HttpRequest,
+    stream: web::Payload,
+    player: Player,
+    ws_map: web::Data<WebsocketMap>,
+) -> Result<impl Responder> {
+    let (addr, res) =
+        WsResponseBuilder::new(LogWebsocket::new(), &req, stream).start_with_addr()?;
+    let mut map = ws_map.data.lock().unwrap();
+    addr.do_send(LogMessage(player.location.describe()));
+    map.insert(player.name, addr.downgrade());
+    Ok(res)
 }
