@@ -4,12 +4,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::{core::Attributes, web_types::Keyed};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Default)]
+#[serde(default)]
 pub struct Dungeon {
     #[serde(rename = "dungeon_name")]
     pub name: String,
+    pub size: DungeonSize,
+    pub difficulty: DungeonLevel,
     pub rooms: Vec<Room>,
-    #[serde(default)]
     pub visited: bool,
 }
 
@@ -17,19 +19,74 @@ pub struct Dungeon {
 pub struct Room {
     pub name: String,
     pub description: String,
+    pub danger_level: DangerLevel,
     pub enemies: Vec<String>,
+    #[serde(default)]
     pub connections: HashMap<Direction, String>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Hash, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, Deserialize, Serialize, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
-pub enum Direction {
-    North,
-    East,
-    South,
-    West,
-    Up,
-    Down,
+pub enum DangerLevel {
+    Safe,
+    Caution,
+    Danger,
+}
+
+impl Default for DangerLevel {
+    fn default() -> Self {
+        DangerLevel::Safe
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+pub enum DungeonSize {
+    Small,
+    Medium,
+    Large,
+    Huge,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+pub enum DungeonLevel {
+    Low,
+    Medium,
+    High,
+}
+
+impl DungeonSize {
+    fn room_number(&self) -> &str {
+        match self {
+            DungeonSize::Small => "five",
+            DungeonSize::Medium => "ten",
+            DungeonSize::Large => "fourteen",
+            DungeonSize::Huge => "twenty",
+        }
+    }
+}
+
+impl DungeonLevel {
+    fn character_level(&self) -> &str {
+        match self {
+            DungeonLevel::Low => "low level",
+            DungeonLevel::Medium => "mid level",
+            DungeonLevel::High => "high level",
+        }
+    }
+}
+
+impl Default for DungeonSize {
+    fn default() -> Self {
+        DungeonSize::Medium
+    }
+}
+
+impl Default for DungeonLevel {
+    fn default() -> Self {
+        DungeonLevel::Medium
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -40,31 +97,7 @@ pub struct Creature {
 }
 
 impl Dungeon {
-    pub fn from_json(json: &str) -> anyhow::Result<(Self, HashSet<String>)> {
-        let mut dungeon: Dungeon = serde_json::from_str(json)?;
-        let enemy_types = dungeon
-            .rooms
-            .iter()
-            .flat_map(|r| &r.enemies)
-            .cloned()
-            .collect();
-
-        let rooms: Vec<HashMap<Direction, String>> = dungeon
-            .rooms
-            .iter()
-            .map(|r| link_connections(&r, &dungeon.rooms))
-            .collect();
-
-        dungeon
-            .rooms
-            .iter_mut()
-            .zip(rooms)
-            .for_each(|(room, conn)| room.connections = conn);
-
-        Ok((dungeon, enemy_types))
-    }
-
-    pub fn room(&self, name:&str) -> Option<&Room> {
+    pub fn room(&self, name: &str) -> Option<&Room> {
         self.rooms.iter().find(|r| r.name == name)
     }
 }
@@ -79,18 +112,15 @@ impl Keyed for Dungeon {
     }
 }
 
-/// Turn the uni-directional graph we get from the AI into a bi-directional graph
-fn link_connections(schema: &Room, rooms: &Vec<Room>) -> HashMap<Direction, String> {
-    rooms
-        .iter()
-        .flat_map(|r| {
-            r.connections
-                .iter()
-                .filter(|p| p.1 == &schema.name)
-                .map(|d| (d.0.inverse(), r.name.to_owned()))
-        })
-        .chain(schema.connections.clone())
-        .collect()
+#[derive(Debug, Deserialize, Serialize, Hash, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+pub enum Direction {
+    North,
+    East,
+    South,
+    West,
+    Up,
+    Down,
 }
 
 impl Default for Direction {
@@ -132,4 +162,46 @@ impl Keyed for Creature {
     fn name(&self) -> &str {
         &self.name
     }
+}
+
+pub struct DungeonGenerator(pub String, pub DungeonLevel, pub DungeonSize);
+
+impl DungeonGenerator {
+    pub async fn generate(self) -> anyhow::Result<(Dungeon, HashSet<String>)> {
+        let name = self.0;
+        let difficulty = self.1;
+        let size = self.2;
+
+        let prompt = include_str!("../primers/rooms.yaml")
+            .replace("{size}", size.room_number())
+            .replace("{level}", difficulty.character_level());
+        let mut con = crate::core::Conversation::prime(&prompt);
+        let json = con.say(&name).await?.1;
+
+        let mut result = serde_json::from_str::<Vec<Room>>(&json);
+        if result.is_err() {
+            result = serde_json::from_str::<Dungeon>(&json).map(|d| d.rooms);
+        }
+
+        let rooms: Vec<Room> = result?;
+        let enemy_types = rooms.iter().flat_map(|r| &r.enemies).cloned().collect();
+
+        let dungeon = Dungeon {
+            name: name.to_owned(),
+            size,
+            difficulty,
+            rooms,
+            visited: false,
+        };
+
+        Ok((dungeon, enemy_types))
+    }
+}
+
+#[tokio::test]
+async fn test_dungeon_conversation() {
+    dotenvy::dotenv().expect(".env file not found");
+    let dungeon = DungeonGenerator("Shadowspire".to_owned(), DungeonLevel::Low, DungeonSize::Medium).generate().await.unwrap();
+    println!("{:#?}", dungeon);
+    assert_eq!(dungeon.0.rooms.len(), 10);
 }

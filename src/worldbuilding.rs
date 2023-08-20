@@ -1,7 +1,10 @@
-use std::{time::Duration, collections::HashSet};
+use std::{collections::HashSet, time::Duration};
 
-use crate::{web_types::State, dungeon::{Dungeon, Creature}, core::Conversation};
-
+use crate::{
+    core::Conversation,
+    dungeon::{Creature, Dungeon, DungeonGenerator},
+    web_types::State,
+};
 
 const STORYTELLER_INTERVAL: Duration = Duration::from_secs(30);
 
@@ -22,16 +25,17 @@ pub async fn run() {
 }
 
 async fn generate_dungeons(state: &State) -> anyhow::Result<()> {
-    let mut dungeon_conv = Conversation::prime(include_str!("../primers/rooms.yaml"));
     let names = generate_names(10, "dungeon").await?;
 
     for name in names {
-        let json = dungeon_conv
-            .query(&format!("dungeon_name: {}", name))
-            .await?
-            .1;
+        let (dungeon, creatures) = DungeonGenerator(
+            name,
+            crate::dungeon::DungeonLevel::Medium,
+            crate::dungeon::DungeonSize::Medium,
+        )
+        .generate()
+        .await?;
 
-        let (dungeon, creatures) = Dungeon::from_json(&json)?;
         for creature in creatures {
             let _ = get_creature(state, &creature).await;
         }
