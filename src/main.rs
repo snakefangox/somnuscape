@@ -1,4 +1,5 @@
 mod engine;
+mod state;
 
 use std::{net::SocketAddr, sync::Arc};
 
@@ -166,7 +167,7 @@ impl ConnectionState {
 
                 *self = Self::Authorized(id, player_connection_handler.setup_connection(id));
 
-                Ok("Password set!\r\nPress Enter to begin your adventure!".to_owned())
+                Ok("Password set.\r\nWelcome to Somnuscape!".to_owned())
             }
             ConnectionState::Login(player_idx) => {
                 let player_idx = *player_idx;
@@ -179,7 +180,7 @@ impl ConnectionState {
                         player_idx,
                         player_connection_handler.setup_connection(player_idx),
                     );
-                    Ok("Login successful!\r\nPress Enter to resume your adventure!".to_owned())
+                    Ok("Login successful.\r\nWelcome back to Somnuscape!".to_owned())
                 } else {
                     Ok(format!(
                         "Login failed, retry your password for {}:",

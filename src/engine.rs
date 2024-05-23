@@ -12,16 +12,17 @@ use tokio_stream::{wrappers::UnboundedReceiverStream, StreamMap};
 use crate::PlayerRegistry;
 
 pub type MudMessage = String;
+const FENNEL_MOD: &str = "fennel";
 
 #[derive(Debug)]
 pub struct Engine {
-    _fennel: Lua,
-    _player_registry: PlayerRegistry,
+    fennel: Lua,
+    player_registry: PlayerRegistry,
 }
 
 impl Engine {
-    pub fn start_engine(_player_registry: PlayerRegistry) -> PlayerConnectionHandler {
-        let (handler, mut receiver) = PlayerConnectionHandler::new();
+    pub fn start_engine(player_registry: PlayerRegistry) -> PlayerConnectionHandler {
+        let (handler, receiver) = PlayerConnectionHandler::new();
 
         std::thread::spawn(move || {
             let local = LocalSet::new();
@@ -30,46 +31,78 @@ impl Engine {
                 .build()
                 .unwrap();
 
-            let mut player_connections: HashMap<usize, UnboundedSender<MudMessage>> =
-                HashMap::new();
-            let mut incoming_msgs: StreamMap<usize, UnboundedReceiverStream<MudMessage>> =
+            let player_connections: HashMap<usize, UnboundedSender<MudMessage>> = HashMap::new();
+            let incoming_msgs: StreamMap<usize, UnboundedReceiverStream<MudMessage>> =
                 StreamMap::new();
 
-            let mut mud = Engine {
-                _fennel: Lua::new(),
-                _player_registry,
+            let fennel = create_fennel().expect("Failed to load fennel");
+
+            let mud = Engine {
+                fennel,
+                player_registry,
             };
 
-            local.spawn_local(async move {
-                loop {
-                    tokio::select! {
-                        conn_msg = handle_new_connections(&mut receiver) => {
-                            match conn_msg.unwrap() {
-                                PlayerConnectMsg::Connect(PlayerConnection(id, r, s)) => {
-                                    player_connections.insert(id, s);
-                                    incoming_msgs.insert(id, UnboundedReceiverStream::new(r));
-                                },
-                                PlayerConnectMsg::Disconnect(id) => {
-                                    player_connections.remove(&id);
-                                    incoming_msgs.remove(&id);
-                                },
-                            }
-                        }
-                        Some((id, msg)) = incoming_msgs.next() => {
-                            // TODO: More advanced handling
-                            for chan in player_connections.values() {
-                                let _ = chan.send(msg.clone());
-                            }
-                        }
-                    }
-                }
-            });
+            local.spawn_local(run_engine(receiver, player_connections, incoming_msgs, mud));
 
             rt.block_on(local);
         });
 
         handler
     }
+}
+
+async fn run_engine(
+    mut receiver: UnboundedReceiver<PlayerConnectMsg>,
+    mut player_connections: HashMap<usize, UnboundedSender<String>>,
+    mut incoming_msgs: StreamMap<usize, UnboundedReceiverStream<String>>,
+    mud: Engine,
+) -> ! {
+    loop {
+        tokio::select! {
+            conn_msg = handle_new_connections(&mut receiver) => {
+                match conn_msg.unwrap() {
+                    PlayerConnectMsg::Connect(PlayerConnection(id, r, s)) => {
+                        player_connections.insert(id, s);
+                        incoming_msgs.insert(id, UnboundedReceiverStream::new(r));
+                    },
+                    PlayerConnectMsg::Disconnect(id) => {
+                        player_connections.remove(&id);
+                        incoming_msgs.remove(&id);
+                    },
+                }
+            }
+            Some((sender_id, msg)) = incoming_msgs.next() => {
+                // TODO: More advanced handling
+                let sender_name = &mud.player_registry.0.read().await[sender_id].username;
+
+                for (recv_id, chan) in player_connections.iter() {
+                    if sender_id != *recv_id {
+                        let _ = chan.send(format!("{sender_name}: {msg}"));
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn create_fennel() -> anyhow::Result<Lua> {
+    let fennel = Lua::new();
+
+    {
+        let fnl_fn = fennel
+            .load(include_str!("include/fennel.lua"))
+            .into_function()?;
+        let fnl: LuaTable = fennel.load_from_function(FENNEL_MOD, fnl_fn)?;
+        fnl.call_function("install", ())?;
+        fennel.globals().raw_set(FENNEL_MOD, fnl.clone())?;
+
+        fnl.call_function(
+            "eval",
+            fennel.create_string(include_str!("include/core.fnl"))?,
+        )?;
+    }
+
+    Ok(fennel)
 }
 
 async fn handle_new_connections(
@@ -79,10 +112,6 @@ async fn handle_new_connections(
         .recv()
         .await
         .ok_or(anyhow!("Engine channel closed"))
-}
-
-async fn handle_messages() -> Option<()> {
-    None
 }
 
 #[derive(Debug)]
@@ -132,6 +161,8 @@ impl PlayerConnectionHandler {
     }
 
     pub fn end_connection(&self, player_id: usize) {
-        self.0.send(PlayerConnectMsg::Disconnect(player_id));
+        self.0
+            .send(PlayerConnectMsg::Disconnect(player_id))
+            .expect("Engine message send shouldn't error");
     }
 }
