@@ -58,7 +58,7 @@ impl Engine {
         let mut args = cmd.split_whitespace();
         if let Some(cmd) = args.next() {
             let args: Vec<&str> = args.collect();
-            let run_cmd: LuaFunction = self.fennel.globals().get("run-cmd")?;
+            let run_cmd: LuaFunction = self.fennel.globals().get("run-command")?;
             let response: LuaString = run_cmd.call((cmd, "world", "player", args))?;
             Ok(response.to_string_lossy().to_string())
         } else {

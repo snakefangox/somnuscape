@@ -3,7 +3,7 @@
     (tset _G "registered-commands" {}))
   (tset _G.registered-commands cmd.name cmd))
 
-(lambda run-cmd [cmd-name world player args]
+(lambda run-command [cmd-name world player args]
   (let [cmd (?. _G.registered-commands cmd-name)]
     (if cmd
       (cmd.exec world player args)
@@ -26,9 +26,8 @@
   (case args
     [cmd] (get-help cmd)
     _ (.. "Listing all commands\nGet help for a specific command with `help <command name>`\nValid commands:\n"
-        (unpack
-          (icollect [key _ (pairs _G.registered-commands)]
-            (.. "\n" key))))))
+        (table.concat
+          (icollect [key _ (pairs _G.registered-commands)] (.. "\n" key))))))
 
 (register-command
   {
@@ -45,5 +44,5 @@
   {
     :register-command register-command
     :deep-print deep-print
-    :run-cmd run-cmd
+    :run-command run-command
   })
