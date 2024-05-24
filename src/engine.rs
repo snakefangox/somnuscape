@@ -5,7 +5,7 @@ use futures::StreamExt;
 use mlua::prelude::*;
 use tokio::{
     sync::mpsc::{UnboundedReceiver, UnboundedSender},
-    task::LocalSet,
+    task::{self, LocalSet},
 };
 use tokio_stream::{wrappers::UnboundedReceiverStream, StreamMap};
 
@@ -21,12 +21,11 @@ pub struct Engine {
 }
 
 impl Engine {
-    #[tracing::instrument]
     pub fn start_engine(player_registry: PlayerRegistry) -> PlayerConnectionHandler {
         let (handler, receiver) = PlayerConnectionHandler::new();
 
         std::thread::spawn(move || {
-            let local = LocalSet::new();
+            let local_set = LocalSet::new();
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
@@ -43,9 +42,12 @@ impl Engine {
                 player_registry,
             };
 
-            local.spawn_local(run_engine(receiver, player_connections, incoming_msgs, mud));
+            task::Builder::new().name("Engine").spawn_local_on(
+                run_engine(receiver, player_connections, incoming_msgs, mud),
+                &local_set,
+            ).unwrap();
 
-            rt.block_on(local);
+            rt.block_on(local_set);
         });
 
         handler

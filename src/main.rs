@@ -29,9 +29,12 @@ async fn main() -> Result<()> {
     let listener = TcpListener::bind(addr).await?;
 
     loop {
-        while let Ok((stream, _)) = listener.accept().await {
+        while let Ok((stream, addr)) = listener.accept().await {
+            tracing::info!("Player connected from {addr}");
+
             let players = players.clone();
             let player_conn_handler = engine_msg_handler.clone();
+
             tokio::spawn(async move {
                 let mut connection_state = ConnectionState::Unauthorized;
                 let pch = player_conn_handler.clone();
@@ -48,7 +51,6 @@ async fn main() -> Result<()> {
     }
 }
 
-#[tracing::instrument]
 async fn handler(
     stream: TcpStream,
     player_registry: PlayerRegistry,
@@ -64,7 +66,9 @@ async fn handler(
         .await?;
 
     loop {
-        if let ConnectionState::Authorized(_, ref mut handler) = connection_state {
+        if let ConnectionState::Authorized(player_id, ref mut handler) = connection_state {
+            tracing::info!("Player {player_id} logged in");
+
             tokio::select! {
                 Some(Ok(TelnetEvent::Message(player_msg))) = frame.next() => {
                     handler.send(player_msg)?;
