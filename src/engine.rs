@@ -49,6 +49,18 @@ impl Engine {
 
         handler
     }
+
+    fn run_command(&self, cmd: &str) -> LuaResult<String> {
+        let mut args = cmd.split_whitespace();
+        if let Some(cmd) = args.next() {
+            let args: Vec<&str> = args.collect();
+            let run_cmd: LuaFunction = self.fennel.globals().get("run-cmd")?;
+            let response: LuaString = run_cmd.call((cmd, "world", "player", args))?;
+            Ok(response.to_string_lossy().to_string())
+        } else {
+            Ok(format!("Command not recognized: '{cmd}'"))
+        }
+    }
 }
 
 async fn run_engine(
@@ -73,13 +85,8 @@ async fn run_engine(
             }
             Some((sender_id, msg)) = incoming_msgs.next() => {
                 // TODO: More advanced handling
-                let sender_name = &mud.player_registry.0.read().await[sender_id].username;
-
-                for (recv_id, chan) in player_connections.iter() {
-                    if sender_id != *recv_id {
-                        let _ = chan.send(format!("{sender_name}: {msg}"));
-                    }
-                }
+                let res = mud.run_command(&msg).unwrap();
+                let _ = player_connections[&sender_id].send(res);
             }
         }
     }
