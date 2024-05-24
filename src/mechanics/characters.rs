@@ -1,7 +1,7 @@
 use mlua::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Attribute(i32);
 
@@ -35,6 +35,30 @@ pub struct Attributes {
     pub willpower: Attribute,
 }
 
+impl LuaUserData for Attributes {
+    fn add_fields<'lua, F: LuaUserDataFields<'lua, Self>>(fields: &mut F) {
+        fields.add_field_method_get("strength", |l, s| s.strength.value().into_lua(l));
+        fields.add_field_method_get("toughness", |l, s| s.toughness.value().into_lua(l));
+        fields.add_field_method_get("agility", |l, s| s.agility.value().into_lua(l));
+        fields.add_field_method_get("intelligence", |l, s| s.intelligence.value().into_lua(l));
+        fields.add_field_method_get("willpower", |l, s| s.willpower.value().into_lua(l));
+
+        fields.add_field_method_set("strength", |_, s, v| Ok(s.strength.0 = v));
+        fields.add_field_method_set("toughness", |_, s, v| Ok(s.toughness.0 = v));
+        fields.add_field_method_set("agility", |_, s, v| Ok(s.agility.0 = v));
+        fields.add_field_method_set("intelligence", |_, s, v| Ok(s.intelligence.0 = v));
+        fields.add_field_method_set("willpower", |_, s, v| Ok(s.willpower.0 = v));
+
+        fields.add_field_method_get("strength-mod", |l, s| s.strength.modifier().into_lua(l));
+        fields.add_field_method_get("toughness-mod", |l, s| s.toughness.modifier().into_lua(l));
+        fields.add_field_method_get("agility-mod", |l, s| s.agility.modifier().into_lua(l));
+        fields.add_field_method_get("intelligence-mod", |l, s| {
+            s.intelligence.modifier().into_lua(l)
+        });
+        fields.add_field_method_get("willpower-mod", |l, s| s.willpower.modifier().into_lua(l));
+    }
+}
+
 #[derive(Debug, Hash, PartialEq, Eq, Default, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", default)]
 pub struct ItemStack {
@@ -48,11 +72,36 @@ impl ItemStack {
     }
 }
 
+impl LuaUserData for ItemStack {}
+
 #[derive(Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", default)]
 pub struct Inventory {
     items: Vec<ItemStack>,
     total_weight: u32,
+}
+
+impl LuaUserData for Inventory {
+    fn add_methods<'lua, M: LuaUserDataMethods<'lua, Self>>(methods: &mut M) {
+        methods.add_meta_function(
+            LuaMetaMethod::Index,
+            |_, (t, k): (LuaUserDataRef<Inventory>, LuaString)| {
+                let v = t
+                    .get(&k.to_string_lossy())
+                    .map(|i| i.count)
+                    .unwrap_or_default();
+                Ok(v)
+            },
+        );
+
+        methods.add_meta_function(
+            LuaMetaMethod::NewIndex,
+            |_, (mut t, k, v): (LuaUserDataRefMut<Inventory>, LuaString, LuaNumber)| {
+                t.add(&*k.to_string_lossy(), v.round() as u32);
+                Ok(())
+            },
+        );
+    }
 }
 
 impl Inventory {
@@ -128,6 +177,8 @@ impl Character {
             .unwrap()
     }
 }
+
+impl LuaUserData for Character {}
 
 #[cfg(test)]
 mod test {
