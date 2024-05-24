@@ -21,6 +21,7 @@ pub struct Engine {
 }
 
 impl Engine {
+    #[tracing::instrument]
     pub fn start_engine(player_registry: PlayerRegistry) -> PlayerConnectionHandler {
         let (handler, receiver) = PlayerConnectionHandler::new();
 
@@ -50,6 +51,7 @@ impl Engine {
         handler
     }
 
+    #[tracing::instrument]
     fn run_command(&self, cmd: &str) -> LuaResult<String> {
         let mut args = cmd.split_whitespace();
         if let Some(cmd) = args.next() {
@@ -84,14 +86,17 @@ async fn run_engine(
                 }
             }
             Some((sender_id, msg)) = incoming_msgs.next() => {
-                // TODO: More advanced handling
-                let res = mud.run_command(&msg).unwrap();
-                let _ = player_connections[&sender_id].send(res);
+                // TODO: More advanced handling, match here
+                match mud.run_command(&msg) {
+                    Ok(res) => player_connections[&sender_id].send(res).unwrap(),
+                    Err(_) => player_connections[&sender_id].send("Sorry, something went wrong".to_string()).unwrap(),
+                }
             }
         }
     }
 }
 
+#[tracing::instrument]
 fn create_fennel() -> anyhow::Result<Lua> {
     let fennel = Lua::new();
 

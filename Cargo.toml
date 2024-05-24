@@ -5,12 +5,14 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.86"
+console-subscriber = "0.2.0"
 futures = "0.3.30"
 mlua = { version = "0.9.8", features = ["luajit", "serialize", "async", "vendored", "macros", "send"] }
 nectar = "0.3.0"
 seahash = "4.1.0"
 serde = { version = "1.0.202", features = ["derive"] }
 serde_yaml = "0.9.34"
-tokio = { version = "1.37.0", features = ["full"] }
+tokio = { version = "1.37.0", features = ["full", "tracing"] }
 tokio-stream = { version = "0.1.15", features = ["sync"] }
 tokio-util = { version = "0.7.11", features = ["codec"] }
+tracing = "0.1.40"

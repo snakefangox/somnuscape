@@ -19,6 +19,8 @@ const PLAYER_REGISTRY_PATH: &str = "somnustate/player-registry.yaml";
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    console_subscriber::init();
+
     tokio::fs::create_dir_all(STATE_DIR).await?;
     let players: PlayerRegistry = PlayerRegistry::load_or_new().await?;
     let engine_msg_handler = Engine::start_engine(players.clone());
@@ -35,7 +37,7 @@ async fn main() -> Result<()> {
                 let pch = player_conn_handler.clone();
 
                 if let Err(e) = handler(stream, players, pch, &mut connection_state).await {
-                    eprintln!("Telnet error: {}", e);
+                    tracing::error!("Player session error: {}", e);
                 }
 
                 if let Some(player_id) = connection_state.get_player_id() {
@@ -46,6 +48,7 @@ async fn main() -> Result<()> {
     }
 }
 
+#[tracing::instrument]
 async fn handler(
     stream: TcpStream,
     player_registry: PlayerRegistry,
@@ -154,9 +157,9 @@ impl ConnectionState {
                     ))
                 } else {
                     *self = ConnectionState::NewUser(username.to_string());
-                    Ok(format!("Welcome {username}!\r\n\r\nWe haven't see you before, please choose a password!\r\n\
-                    (Friendly reminder that for nostalgia's sake, your connection is unencrypted.\r\n\
-                    *Please* use a unique password, people could be watching)\r\n\r\nPassword:"))
+                    Ok(format!("Welcome {username}!\n\nWe haven't see you before, please choose a password!\n\
+                    (Friendly reminder that for nostalgia's sake, your connection is unencrypted.\n\
+                    *Please* use a unique password, people could be watching)\n\nPassword:"))
                 }
             }
             ConnectionState::NewUser(username) => {
@@ -180,7 +183,7 @@ impl ConnectionState {
                         player_idx,
                         player_connection_handler.setup_connection(player_idx),
                     );
-                    Ok("Login successful.\r\nWelcome back to Somnuscape!".to_owned())
+                    Ok("Login successful.\nWelcome back to Somnuscape!".to_owned())
                 } else {
                     Ok(format!(
                         "Login failed, retry your password for {}:",
