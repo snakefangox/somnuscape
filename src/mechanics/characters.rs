@@ -59,6 +59,33 @@ impl LuaUserData for Attributes {
     }
 }
 
+impl<'lua> FromLua<'lua> for Attributes {
+    fn from_lua(value: LuaValue<'lua>, _: &'lua Lua) -> LuaResult<Self> {
+        if let Some(value) = value.as_table() {
+            let mut attrs = Attributes::default();
+            if let Some(strength) = value.get("strength")? {
+                attrs.strength.0 = strength;
+            }
+            if let Some(toughness) = value.get("toughness")? {
+                attrs.toughness.0 = toughness;
+            }
+            if let Some(agility) = value.get("agility")? {
+                attrs.agility.0 = agility;
+            }
+            if let Some(intelligence) = value.get("intelligence")? {
+                attrs.intelligence.0 = intelligence;
+            }
+            if let Some(willpower) = value.get("willpower")? {
+                attrs.willpower.0 = willpower;
+            }
+
+            Ok(attrs)
+        } else {
+            Err(LuaError::runtime("Invalid object, cannot make attributes"))
+        }
+    }
+}
+
 #[derive(Debug, Hash, PartialEq, Eq, Default, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", default)]
 pub struct ItemStack {
@@ -178,7 +205,17 @@ impl Character {
     }
 }
 
-impl LuaUserData for Character {}
+impl LuaUserData for Character {
+    fn add_fields<'lua, F: LuaUserDataFields<'lua, Self>>(fields: &mut F) {
+        fields.add_field_method_get("name", |l, c| Ok(l.create_string(&c.name)?));
+        fields.add_field_method_set("name", |_, c, v| Ok(c.name = v));
+
+        fields.add_field_method_get("attributes", |_, c| Ok(c.attributes.clone()));
+        fields.add_field_method_set("attributes", |_, c, v| Ok(c.attributes = v));
+
+        fields.add_field_method_get("inventory", |_, c| Ok(c.inventory.clone()));
+    }
+}
 
 #[cfg(test)]
 mod test {
