@@ -1,0 +1,124 @@
+use std::collections::HashMap;
+
+use crossbeam::channel::Receiver;
+use crossbeam::channel::Sender;
+use tokio::sync::mpsc::UnboundedReceiver as TokioReceiver;
+use tokio::sync::mpsc::UnboundedSender as TokioSender;
+
+pub type MudMessage = String;
+
+/// The connection object the engine holds to talk to the player
+#[derive(Debug, Clone)]
+pub struct PlayerConnection(
+    pub usize,
+    pub Receiver<MudMessage>,
+    pub TokioSender<MudMessage>,
+);
+
+impl PlayerConnection {
+    pub fn send(&mut self, msg: MudMessage) -> anyhow::Result<()> {
+        self.2.send(msg)?;
+        Ok(())
+    }
+
+    pub fn poll(&mut self) -> anyhow::Result<MudMessage> {
+        Ok(self.1.try_recv()?)
+    }
+}
+
+/// The connection object the player task holds to talk to the engine
+#[derive(Debug)]
+pub struct EngineConnection(
+    pub usize,
+    pub TokioReceiver<MudMessage>,
+    pub Sender<MudMessage>,
+);
+
+impl EngineConnection {
+    pub fn send(&mut self, msg: MudMessage) -> anyhow::Result<()> {
+        self.2.send(msg)?;
+        Ok(())
+    }
+
+    pub async fn recv(&mut self) -> anyhow::Result<MudMessage> {
+        Ok(self.1.recv().await.ok_or(anyhow::anyhow!(
+            "Engine channel closed, this shouldn't happen"
+        ))?)
+    }
+}
+
+pub enum PlayerConnectMsg {
+    Connect(PlayerConnection),
+    Disconnect(usize),
+}
+
+#[derive(Debug, Clone)]
+pub struct PlayerConnectionBroker(Sender<PlayerConnectMsg>);
+
+impl PlayerConnectionBroker {
+    pub fn new() -> (PlayerConnectionBroker, EngineConnectionBroker) {
+        let (s, r) = crossbeam::channel::unbounded::<PlayerConnectMsg>();
+        (PlayerConnectionBroker(s), EngineConnectionBroker::new(r))
+    }
+
+    pub fn setup_connection(&self, player_id: usize) -> EngineConnection {
+        let (s_engine, r_engine) = crossbeam::channel::unbounded();
+        let (s_player, r_player) = tokio::sync::mpsc::unbounded_channel();
+        self.0
+            .send(PlayerConnectMsg::Connect(PlayerConnection(
+                player_id, r_engine, s_player,
+            )))
+            .expect("Message send to engine shouldn't error");
+        EngineConnection(player_id, r_player, s_engine)
+    }
+
+    pub fn end_connection(&self, player_id: usize) {
+        self.0
+            .send(PlayerConnectMsg::Disconnect(player_id))
+            .expect("Engine message send shouldn't error");
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct EngineConnectionBroker {
+    incoming_connections: Receiver<PlayerConnectMsg>,
+    player_connections: HashMap<usize, PlayerConnection>,
+}
+
+impl EngineConnectionBroker {
+    fn new(incoming_connections: Receiver<PlayerConnectMsg>) -> Self {
+        Self {
+            incoming_connections,
+            player_connections: HashMap::new(),
+        }
+    }
+
+    pub fn handle_connection_changes(&mut self) {
+        while let Ok(msg) = self.incoming_connections.try_recv() {
+            match msg {
+                PlayerConnectMsg::Connect(player_connection) => self
+                    .player_connections
+                    .insert(player_connection.0, player_connection),
+                PlayerConnectMsg::Disconnect(player_id) => self.player_connections.remove(&player_id),
+            };
+        }
+    }
+
+    pub fn poll_player_messages(&mut self) -> Option<(usize, MudMessage)> {
+        for player_connection in self.player_connections.values_mut() {
+            if let Ok(msg) = player_connection.poll() {
+                return Some((player_connection.0, msg));
+            }
+        }
+
+        None
+    }
+
+    pub fn send_player_message(&mut self, player: usize, msg: MudMessage) {
+        if let Some(player_connection) = self.player_connections.get(&player) {
+            if let Err(e) = player_connection.2.send(msg) {
+                tracing::error!("Error sending to player {e}");
+            }
+        }
+    }
+}
