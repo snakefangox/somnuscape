@@ -1,6 +1,7 @@
 mod connections;
 mod engine;
 mod state;
+mod commands;
 
 use std::net::SocketAddr;
 
