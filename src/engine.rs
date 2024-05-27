@@ -1,9 +1,9 @@
 use std::{rc::Rc, time::Duration};
 
-use tokio::task::{self, LocalSet};
-
 use crate::{
-    commands::{self, Command}, connections::{EngineConnectionBroker, PlayerConnectionBroker}, PlayerEntry, Registry
+    commands::{self, Command},
+    connections::{EngineConnectionBroker, PlayerConnectionBroker},
+    PlayerEntry, Registry,
 };
 
 /// All the engine state kept between frames, including world info
@@ -18,34 +18,25 @@ impl Engine {
         let (player_connection_broker, connection_broker) = PlayerConnectionBroker::new();
 
         std::thread::spawn(move || {
-            let local_set = LocalSet::new();
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .unwrap();
-
             let mud = Engine {
                 player_registry,
                 connection_broker,
                 commands: commands::base_commands(),
             };
 
-            task::Builder::new()
-                .name("Engine")
-                .spawn_local_on(run_engine(mud), &local_set)
-                .unwrap();
-
-            rt.block_on(local_set);
+            run_engine(mud);
         });
 
         player_connection_broker
     }
 }
 
-async fn run_engine(mut mud: Engine) -> ! {
-    let mut tick_timer = tokio::time::interval(Duration::from_secs_f64(1.0 / 20.0));
+fn run_engine(mut mud: Engine) -> ! {
+    let tick_period = Duration::from_secs_f64(1.0 / 20.0);
+    let tick_duration = crossbeam::channel::tick(tick_period);
+
     loop {
-        tick_timer.tick().await;
+        tick_duration.recv().expect("Tick channel should not close");
 
         mud.connection_broker.handle_connection_changes();
 
@@ -53,13 +44,46 @@ async fn run_engine(mut mud: Engine) -> ! {
             let mut args_iter = msg.split_whitespace();
             if let Some(cmd) = args_iter.next() {
                 let c = mud.commands.iter().find(|c| c.match_name(cmd)).cloned();
-                let res = match c {
-                    Some(cmd) => (cmd.cmd)(&mut mud, &mut args_iter),
-                    None => String::new(),
+                match c {
+                    Some(cmd) => (cmd.cmd_fn)(&mut mud, player, &mut args_iter),
+                    None => mud
+                        .connection_broker
+                        .send_player_message(player, get_close_commands(cmd, &mud.commands)),
                 };
-
-                mud.connection_broker.send_player_message(player, res);
             }
         }
     }
+}
+
+pub fn get_close_commands<'a>(input: &str, commands: &'a Vec<Rc<Command>>) -> String {
+    let mut closest = Vec::new();
+    for cmd in commands {
+        let name_dist = strsim::levenshtein(input, &cmd.name);
+        let alias_min = cmd
+            .aliases
+            .iter()
+            .map(|s| (s, strsim::levenshtein(input, &s)))
+            .min_by_key(|(_, d)| *d);
+
+        if let Some((alias, alias_dist)) = alias_min {
+            if alias_dist < name_dist {
+                closest.push((alias.as_str(), alias_dist));
+                continue;
+            }
+        }
+
+        closest.push((cmd.name.as_str(), name_dist));
+    }
+
+    closest.sort_by_key(|(_, d)| *d);
+
+    let mut res = format!("Command '{input}' not found, did you mean one of these? ");
+    for (cmd, _) in closest.iter().take(3) {
+        res.push('\'');
+        res.push_str(cmd);
+        res.push('\'');
+        res.push(' ');
+    }
+
+    res
 }

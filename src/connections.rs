@@ -5,6 +5,8 @@ use crossbeam::channel::Sender;
 use tokio::sync::mpsc::UnboundedReceiver as TokioReceiver;
 use tokio::sync::mpsc::UnboundedSender as TokioSender;
 
+use crate::AppErrors;
+
 pub type MudMessage = String;
 
 /// The connection object the engine holds to talk to the player
@@ -23,18 +25,20 @@ impl PlayerConnection {
 
 /// The connection object the player task holds to talk to the engine
 #[derive(Debug)]
-pub struct EngineConnection(TokioReceiver<MudMessage>, Sender<MudMessage>);
+pub struct EngineConnection(usize, TokioReceiver<MudMessage>, Sender<MudMessage>);
 
 impl EngineConnection {
     pub fn send(&mut self, msg: MudMessage) -> anyhow::Result<()> {
-        self.1.send(msg)?;
+        self.2.send(msg)?;
         Ok(())
     }
 
     pub async fn recv(&mut self) -> anyhow::Result<MudMessage> {
-        Ok(self.0.recv().await.ok_or(anyhow::anyhow!(
-            "Engine channel closed, this shouldn't happen"
-        ))?)
+        let msg = self.1.recv().await;
+        match msg {
+            Some(m) => Ok(m),
+            None => Err(AppErrors::PlayerDisconnected(self.0).into()),
+        }
     }
 }
 
@@ -60,7 +64,7 @@ impl PlayerConnectionBroker {
                 player_id, r_engine, s_player,
             )))
             .expect("Join message send to engine shouldn't error");
-        EngineConnection(r_player, s_engine)
+        EngineConnection(player_id, r_player, s_engine)
     }
 
     pub fn end_connection(&self, player_id: usize) {
@@ -113,5 +117,9 @@ impl EngineConnectionBroker {
                 tracing::error!("Error sending to player {e}");
             }
         }
+    }
+
+    pub fn disconnect_player(&mut self, player: usize) {
+        self.player_connections.remove(&player);
     }
 }

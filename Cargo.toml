@@ -13,6 +13,7 @@ nectar = "0.3.0"
 seahash = "4.1.0"
 serde = { version = "1.0.202", features = ["derive"] }
 serde_yaml = "0.9.34"
+strsim = "0.11.1"
 tokio = { version = "1.37.0", features = ["full", "tracing"] }
 tokio-util = { version = "0.7.11", features = ["codec"] }
 tracing = "0.1.40"

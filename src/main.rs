@@ -1,10 +1,11 @@
+mod characters;
+mod commands;
 mod connections;
 mod engine;
 mod state;
-mod commands;
-mod characters;
 
 use std::net::SocketAddr;
+use std::{error::Error, fmt::Display};
 
 use anyhow::Result;
 use connections::{EngineConnection, PlayerConnectionBroker};
@@ -37,8 +38,16 @@ async fn main() -> Result<()> {
                 let mut connection_state = ConnectionState::Unauthorized;
                 let pch = player_conn_handler.clone();
 
-                if let Err(e) = handler(stream, players, pch, &mut connection_state).await {
-                    tracing::error!("Player session error: {}", e);
+                if let Err(e) = handler(stream, players.clone(), pch, &mut connection_state).await {
+                    if e.is::<AppErrors>() {
+                        if let Ok(AppErrors::PlayerDisconnected(id)) = e.downcast::<AppErrors>() {
+                            let pr = players.read().await;
+                            let n = pr.get(id).map(|p| p.username.as_str()).unwrap_or_default();
+                            tracing::info!("Player disconnected: {n}");
+                        }
+                    } else {
+                        tracing::error!("Player connection error: {e}");
+                    }
                 }
 
                 if let Some(player_id) = connection_state.get_player_id() {
@@ -151,10 +160,8 @@ impl ConnectionState {
                 let player = &read[player_id];
 
                 if password == player.password {
-                    *self = ConnectionState::Authorized(
-                        player_id,
-                        broker.setup_connection(player_id),
-                    );
+                    *self =
+                        ConnectionState::Authorized(player_id, broker.setup_connection(player_id));
                     tracing::info!("Player {} logged in", player.username);
 
                     Ok("Login successful.\r\nWelcome back to Somnuscape!".to_owned())
@@ -177,6 +184,21 @@ impl ConnectionState {
             ConnectionState::NewUser(_) => None,
             ConnectionState::Login(_) => None,
             ConnectionState::Authorized(id, _) => Some(*id),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum AppErrors {
+    PlayerDisconnected(usize),
+}
+
+impl Error for AppErrors {}
+
+impl Display for AppErrors {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AppErrors::PlayerDisconnected(_) => f.write_str("Player Disconnected"),
         }
     }
 }

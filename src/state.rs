@@ -42,4 +42,8 @@ impl<T: for<'a> Deserialize<'a> + Serialize> Registry<T> {
     pub async fn read(&self) -> RwLockReadGuard<Vec<T>> {
         self.0.read().await
     }
+
+    pub fn blocking_read(&self) -> RwLockReadGuard<Vec<T>> {
+        self.0.blocking_read()
+    }
 }
