@@ -1,16 +1,16 @@
-use std::time::Duration;
+use std::{rc::Rc, time::Duration};
 
 use tokio::task::{self, LocalSet};
 
 use crate::{
-    connections::{EngineConnectionBroker, PlayerConnectionBroker},
-    PlayerEntry, Registry,
+    commands::{self, Command}, connections::{EngineConnectionBroker, PlayerConnectionBroker}, PlayerEntry, Registry
 };
 
-#[derive(Debug)]
+/// All the engine state kept between frames, including world info
 pub struct Engine {
-    connection_broker: EngineConnectionBroker,
-    player_registry: Registry<PlayerEntry>,
+    pub connection_broker: EngineConnectionBroker,
+    pub player_registry: Registry<PlayerEntry>,
+    pub commands: Vec<Rc<Command>>,
 }
 
 impl Engine {
@@ -27,6 +27,7 @@ impl Engine {
             let mud = Engine {
                 player_registry,
                 connection_broker,
+                commands: commands::base_commands(),
             };
 
             task::Builder::new()
@@ -49,7 +50,16 @@ async fn run_engine(mut mud: Engine) -> ! {
         mud.connection_broker.handle_connection_changes();
 
         while let Some((player, msg)) = mud.connection_broker.poll_player_messages() {
-            mud.connection_broker.send_player_message(player, msg);
+            let mut args_iter = msg.split_whitespace();
+            if let Some(cmd) = args_iter.next() {
+                let c = mud.commands.iter().find(|c| c.match_name(cmd)).cloned();
+                let res = match c {
+                    Some(cmd) => (cmd.cmd)(&mut mud, &mut args_iter),
+                    None => String::new(),
+                };
+
+                mud.connection_broker.send_player_message(player, res);
+            }
         }
     }
 }

@@ -16,11 +16,6 @@ pub struct PlayerConnection(
 );
 
 impl PlayerConnection {
-    pub fn send(&mut self, msg: MudMessage) -> anyhow::Result<()> {
-        self.2.send(msg)?;
-        Ok(())
-    }
-
     pub fn poll(&mut self) -> anyhow::Result<MudMessage> {
         Ok(self.1.try_recv()?)
     }
@@ -28,20 +23,16 @@ impl PlayerConnection {
 
 /// The connection object the player task holds to talk to the engine
 #[derive(Debug)]
-pub struct EngineConnection(
-    pub usize,
-    pub TokioReceiver<MudMessage>,
-    pub Sender<MudMessage>,
-);
+pub struct EngineConnection(TokioReceiver<MudMessage>, Sender<MudMessage>);
 
 impl EngineConnection {
     pub fn send(&mut self, msg: MudMessage) -> anyhow::Result<()> {
-        self.2.send(msg)?;
+        self.1.send(msg)?;
         Ok(())
     }
 
     pub async fn recv(&mut self) -> anyhow::Result<MudMessage> {
-        Ok(self.1.recv().await.ok_or(anyhow::anyhow!(
+        Ok(self.0.recv().await.ok_or(anyhow::anyhow!(
             "Engine channel closed, this shouldn't happen"
         ))?)
     }
@@ -68,14 +59,14 @@ impl PlayerConnectionBroker {
             .send(PlayerConnectMsg::Connect(PlayerConnection(
                 player_id, r_engine, s_player,
             )))
-            .expect("Message send to engine shouldn't error");
-        EngineConnection(player_id, r_player, s_engine)
+            .expect("Join message send to engine shouldn't error");
+        EngineConnection(r_player, s_engine)
     }
 
     pub fn end_connection(&self, player_id: usize) {
         self.0
             .send(PlayerConnectMsg::Disconnect(player_id))
-            .expect("Engine message send shouldn't error");
+            .expect("Disconnect message send to engine shouldn't error");
     }
 }
 
@@ -99,7 +90,9 @@ impl EngineConnectionBroker {
                 PlayerConnectMsg::Connect(player_connection) => self
                     .player_connections
                     .insert(player_connection.0, player_connection),
-                PlayerConnectMsg::Disconnect(player_id) => self.player_connections.remove(&player_id),
+                PlayerConnectMsg::Disconnect(player_id) => {
+                    self.player_connections.remove(&player_id)
+                }
             };
         }
     }
