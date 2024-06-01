@@ -5,6 +5,8 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct SomnuscapeConfig {
+    pub save_every_x_ticks: u64,
+    pub ticks_per_second: f64,
     pub model_temperature: f32,
     pub tone_words: Vec<String>,
     pub tone_words_per_generation: usize,
@@ -20,9 +22,11 @@ impl Default for SomnuscapeConfig {
                 "dark".into(),
                 "light".into(),
                 "gothic".into(),
-                "holy".into(),
+                "sacrosanct".into(),
             ],
             tone_words_per_generation: 2,
+            save_every_x_ticks: 200,
+            ticks_per_second: 20.0,
         }
     }
 }

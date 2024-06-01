@@ -121,7 +121,6 @@ impl Place {
                 return true;
             }
         }
-
         false
     }
 

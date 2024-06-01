@@ -120,16 +120,16 @@ impl AIClient {
     pub async fn generate_with_tone(&self, mut prompt: String) -> Result<String> {
         let hash: i32 = self.make_gen_hash(&prompt);
 
-        let mut rng = rand::rngs::StdRng::seed_from_u64((self.seed | hash) as u64);
+        let mut rng = rand::rngs::StdRng::seed_from_u64((self.seed ^ hash) as u64);
         let mut tone: String = "\nUse the following tone: ".into();
         let mut iter = self.tone.iter().map(|s| s.as_str());
 
-        for i in 0..=config::get().tone_words_per_generation {
+        for i in 0..config::get().tone_words_per_generation {
             if let Some(s) = (&mut iter).choose(&mut rng) {
                 tone.push_str(s);
-                if i != config::get().tone_words_per_generation {
-                    tone.push(' ');
+                if i + 1 < config::get().tone_words_per_generation {
                     tone.push(',');
+                    tone.push(' ');
                 }
             }
         }
@@ -150,7 +150,7 @@ impl AIClient {
             .generate(
                 GenerationRequest::new("llama3:latest".to_string(), prompt).options(
                     GenerationOptions::default()
-                        .seed(self.seed | hash)
+                        .seed(self.seed ^ hash)
                         .temperature(config::get().model_temperature),
                 ),
             )

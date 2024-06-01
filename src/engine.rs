@@ -2,6 +2,7 @@ use std::{collections::HashMap, rc::Rc, time::Duration};
 
 use crate::{
     commands::{self, Command},
+    config,
     connections::{EngineConnectionBroker, PlayerConnectionBroker},
     generation::{GenerationReq, GenerationRes, GeneratorHandle},
     mud::world::{Direction, Location, Place, World},
@@ -43,7 +44,7 @@ impl Engine {
 }
 
 fn run_engine(mut engine: Engine) -> ! {
-    let tick_period = Duration::from_secs_f64(1.0 / 20.0);
+    let tick_period = Duration::from_secs_f64(1.0 / config::get().ticks_per_second);
     let tick_duration = crossbeam::channel::tick(tick_period);
 
     loop {
@@ -66,8 +67,7 @@ fn run_engine(mut engine: Engine) -> ! {
 
         incorperate_generation(&mut engine);
 
-        // Try save world every 10 seconds
-        engine.world.check_save(10 * 20);
+        engine.world.check_save(config::get().save_every_x_ticks);
     }
 }
 
@@ -118,7 +118,7 @@ fn incorperate_generation(engine: &mut Engine) {
 fn add_new_locale(engine: &mut Engine, mut place: Place, rooms: HashMap<Location, Place>) {
     for ow_location in &engine.world.overworld_locales {
         let ow_place = engine.world.places.get_mut(ow_location).unwrap();
-        // Limit to 5 connections to avoid adding up
+        // Limit to 5 connections to avoid adding things in the up direction
         if ow_place.connections().len() < 5 {
             let dir = ow_place
                 .add_connection(Direction::North, place.location)
