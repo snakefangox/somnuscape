@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::OnceLock};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[serde(default, rename_all = "kebab-case")]
 pub struct SomnuscapeConfig {
     pub tone_words: Vec<String>,
     pub tone_words_per_generation: usize,
