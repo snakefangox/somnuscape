@@ -3,6 +3,8 @@ mod commands;
 mod connections;
 mod engine;
 mod state;
+mod generation;
+mod world;
 
 use std::net::SocketAddr;
 use std::{error::Error, fmt::Display};
@@ -191,6 +193,7 @@ impl ConnectionState {
 #[derive(Debug, PartialEq)]
 pub enum AppErrors {
     PlayerDisconnected(usize),
+    AIStructureError,
 }
 
 impl Error for AppErrors {}
@@ -199,6 +202,20 @@ impl Display for AppErrors {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             AppErrors::PlayerDisconnected(_) => f.write_str("Player Disconnected"),
+            AppErrors::AIStructureError => f.write_str("AI Structure Error"),
+        }
+    }
+}
+
+mod filters {
+    pub fn pluralize<T: std::fmt::Display>(s: T) -> ::askama::Result<String> {
+        let mut s = s.to_string();
+        if s.ends_with("s") {
+            s.push_str("es");
+            Ok(s)
+        } else {
+            s.push_str("s");
+            Ok(s)
         }
     }
 }

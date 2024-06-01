@@ -31,24 +31,24 @@ impl Engine {
     }
 }
 
-fn run_engine(mut mud: Engine) -> ! {
+fn run_engine(mut engine: Engine) -> ! {
     let tick_period = Duration::from_secs_f64(1.0 / 20.0);
     let tick_duration = crossbeam::channel::tick(tick_period);
 
     loop {
         tick_duration.recv().expect("Tick channel should not close");
 
-        mud.connection_broker.handle_connection_changes();
+        engine.connection_broker.handle_connection_changes();
 
-        while let Some((player, msg)) = mud.connection_broker.poll_player_messages() {
+        while let Some((player, msg)) = engine.connection_broker.poll_player_messages() {
             let mut args_iter = msg.split_whitespace();
             if let Some(cmd) = args_iter.next() {
-                let c = mud.commands.iter().find(|c| c.match_name(cmd)).cloned();
+                let c = engine.commands.iter().find(|c| c.match_name(cmd)).cloned();
                 match c {
-                    Some(cmd) => (cmd.cmd_fn)(&mut mud, player, &mut args_iter),
-                    None => mud
+                    Some(cmd) => (cmd.cmd_fn)(&mut engine, player, &mut args_iter),
+                    None => engine
                         .connection_broker
-                        .send_player_message(player, get_close_commands(cmd, &mud.commands)),
+                        .send_player_message(player, get_close_commands(cmd, &engine.commands)),
                 };
             }
         }
