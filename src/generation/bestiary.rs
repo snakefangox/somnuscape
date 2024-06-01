@@ -8,9 +8,9 @@ use super::AIClient;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreatureTemplate {
-    name: String,
-    attributes: Attributes,
-    items: Vec<String>,
+    pub name: String,
+    pub attributes: Attributes,
+    pub items: Vec<String>,
 }
 
 #[derive(Template, Default)]
@@ -39,26 +39,5 @@ impl CreatureTemplate {
             .await?;
 
         Ok(generation::extract_yaml(&res)?)
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[tokio::test]
-    async fn generate_sensible_creatures() {
-        if std::env::var("SKIP_AI_TESTS").unwrap_or_default() == "yes" {
-            return;
-        }
-        let client = AIClient::default();
-
-        let minotaur = CreatureTemplate::stat_new(&client, "minotaur").await.unwrap();
-        assert!(minotaur.attributes.strength > minotaur.attributes.intelligence);
-        assert!(minotaur.attributes.toughness > minotaur.attributes.willpower);
-
-        let lich = CreatureTemplate::stat_new(&client, "lich").await.unwrap();
-        assert!(lich.attributes.intelligence > lich.attributes.strength);
-        assert!(lich.attributes.willpower > lich.attributes.toughness);
     }
 }

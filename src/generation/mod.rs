@@ -184,3 +184,24 @@ fn extract_yaml<T: DeserializeOwned + Send>(res: &str) -> Result<T> {
         Ok(serde_yaml::from_str(res)?)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use bestiary::CreatureTemplate;
+
+    use super::*;
+
+    #[tokio::test]
+    #[ignore = "ai"]
+    async fn generate_sensible_creatures() {
+        let client = AIClient::default();
+
+        let minotaur = CreatureTemplate::stat_new(&client, "minotaur").await.unwrap();
+        assert!(minotaur.attributes.strength > minotaur.attributes.intelligence);
+        assert!(minotaur.attributes.toughness > minotaur.attributes.willpower);
+
+        let lich = CreatureTemplate::stat_new(&client, "lich").await.unwrap();
+        assert!(lich.attributes.intelligence > lich.attributes.strength);
+        assert!(lich.attributes.willpower > lich.attributes.toughness);
+    }
+}
