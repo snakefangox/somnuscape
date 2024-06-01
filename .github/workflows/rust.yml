@@ -8,6 +8,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  SKIP_AI_TESTS: "yes"
 
 jobs:
   build:

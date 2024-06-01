@@ -1,10 +1,10 @@
-mod characters;
 mod commands;
 mod connections;
 mod engine;
 mod generation;
 mod state;
-mod world;
+mod mud;
+mod config;
 
 use std::net::SocketAddr;
 use std::{error::Error, fmt::Display};
@@ -26,7 +26,7 @@ async fn main() -> Result<()> {
 
     let players: Registry<PlayerEntry> = Registry::load_or_new("player-registry.yaml").await?;
     let (mut gen, gen_handle) = Generator::new();
-    tokio::spawn(async move { gen.run().await });
+    tokio::spawn(async move { gen.run().await; });
 
     let engine_msg_handler = Engine::start_engine(players.clone(), gen_handle);
 

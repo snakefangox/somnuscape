@@ -1,23 +1,29 @@
 mod bestiary;
 mod place;
 
+use std::hash::{Hash, Hasher};
+
 use anyhow::Result;
 use crossbeam::channel::{Receiver, Sender, TryRecvError};
 use ollama_rs::{
     generation::{completion::request::GenerationRequest, options::GenerationOptions},
     Ollama,
 };
+use rand::{seq::IteratorRandom, SeedableRng};
 use regex::Regex;
 use serde::de::DeserializeOwned;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use crate::world::{Place, PlaceType};
+use crate::{
+    config,
+    mud::world::{Place, PlaceType},
+};
 
 #[derive(Debug)]
 pub struct Generator {
     request_queue: UnboundedReceiver<GenerationReq>,
     response_queue: Sender<GenerationRes>,
-    client: Ollama,
+    client: AIClient,
 }
 
 #[derive(Debug)]
@@ -45,7 +51,7 @@ impl Generator {
             Self {
                 request_queue: req_r,
                 response_queue: res_s,
-                client: Ollama::default(),
+                client: AIClient::new_random(config::get().tone_words.clone()),
             },
             GeneratorHandle {
                 request_queue: req_s,
@@ -62,9 +68,9 @@ impl Generator {
                 .await
                 .expect("Gen request channel shouldn't close");
             let res = match req {
-                GenerationReq::Places(place_type, count) => {
-                    GenerationRes::Place(place::generate_places(place_type, count).await)
-                }
+                GenerationReq::Places(place_type, count) => GenerationRes::Place(
+                    place::generate_places(&self.client, place_type, count).await,
+                ),
             };
 
             self.response_queue
@@ -85,8 +91,70 @@ impl GeneratorHandle {
         match self.response_queue.try_recv() {
             Ok(r) => Some(r),
             Err(TryRecvError::Empty) => None,
-            Err(TryRecvError::Disconnected) => unreachable!("Gen handle response channel shouldn't close"),
+            Err(TryRecvError::Disconnected) => {
+                unreachable!("Gen handle response channel shouldn't close")
+            }
         }
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct AIClient {
+    client: Ollama,
+    seed: i32,
+    tone: Vec<String>,
+    /// We want to run deterministically for tests
+    non_deterministic: bool,
+}
+
+impl AIClient {
+    pub fn new_random(tone_words: Vec<String>) -> Self {
+        AIClient {
+            client: Ollama::default(),
+            seed: rand::random(),
+            tone: tone_words,
+            non_deterministic: true,
+        }
+    }
+
+    pub async fn generate(&self, mut prompt: String) -> Result<String> {
+        let hash: i32 = {
+            let mut h = seahash::SeaHasher::new();
+            prompt.hash(&mut h);
+
+            if self.non_deterministic {
+                h.write_u64(rand::random());
+            }
+
+            h.finish() as i32 // We're happy to chop the value here
+        };
+
+        let mut rng = rand::rngs::StdRng::seed_from_u64((self.seed | hash) as u64);
+        let mut tone: String = "\nUse the following tone: ".into();
+        let mut iter = self.tone.iter().map(|s| s.as_str());
+
+        for i in 0..=config::get().tone_words_per_generation {
+            if let Some(s) = (&mut iter).choose(&mut rng) {
+                tone.push_str(s);
+                if i != config::get().tone_words_per_generation {
+                    tone.push(' ');
+                    tone.push(',');
+                }
+            }
+        }
+
+        prompt.push_str(&tone);
+
+        let res = self
+            .client
+            .generate(
+                GenerationRequest::new("llama3:latest".to_string(), prompt)
+                    .options(GenerationOptions::default().seed(self.seed | hash)),
+            )
+            .await?
+            .response;
+
+        Ok(res)
     }
 }
 
@@ -115,15 +183,4 @@ fn extract_yaml<T: DeserializeOwned + Send>(res: &str) -> Result<T> {
     } else {
         Ok(serde_yaml::from_str(res)?)
     }
-}
-
-async fn generate(prompt: String) -> Result<String> {
-    let ollama = Ollama::default();
-    Ok(ollama
-        .generate(
-            GenerationRequest::new("llama3:latest".to_string(), prompt)
-                .options(GenerationOptions::default().seed(rand::random())),
-        )
-        .await?
-        .response)
 }

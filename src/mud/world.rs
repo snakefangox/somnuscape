@@ -23,6 +23,7 @@ impl World {
             Self::default()
         }
     }
+
     /// Increment the current tick count and then check and save if needed
     pub fn check_save(&mut self, interval: u64) {
         self.current_tick += 1;

@@ -2,70 +2,69 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use askama::Template;
-use futures::{future, FutureExt};
 use petgraph::graph::{NodeIndex, UnGraph};
 use rand::seq::IteratorRandom;
 use serde::Deserialize;
 
 use crate::{
-    filters, generation::{extract_md_kv_list, extract_yaml, generate}, world::{Place, PlaceType, Room}, AppErrors
+    filters,
+    generation::{extract_md_kv_list, extract_yaml},
+    mud::world::{Place, PlaceType, Room},
+    AppErrors,
 };
 
-pub async fn generate_places(place_type: PlaceType, max_count: usize) -> Vec<Place> {
+use super::AIClient;
+
+pub async fn generate_places(
+    client: &AIClient,
+    place_type: PlaceType,
+    max_count: usize,
+) -> Vec<Place> {
     tracing::info!("Generating up to {max_count} {place_type:?}s");
-    let place_ideas = generate_place_list(&place_type.name())
-        .await
-        .unwrap_or_default();
 
-    let room_futures = place_ideas.into_iter().take(max_count).map(|p| {
-        async move {
-            (
-                generate_rooms(&place_type.name(), &place_type.room_type(), p.clone()).await,
-                p,
-            )
-        }
-        .then(|(r, p)| async_linker_block(r, place_type, p))
-    });
+    let mut places = Vec::new();
+    loop {
+        let place_ideas = generate_place_list(client, &place_type.name())
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .take(max_count - places.len());
 
-    future::join_all(room_futures)
-        .await
-        .into_iter()
-        .filter_map(|(r, p)| {
-            if let Ok(r) = r {
-                Some(Place::new(p, place_type, r.0, r.1.into()))
-            } else {
-                None
+        for place_idea in place_ideas {
+            match generate_place(client, place_type, &place_idea).await {
+                Ok(p) => places.push(p),
+                Err(e) => tracing::error!("Couldn't generate {}: {}", place_idea.0, e),
             }
-        })
-        .collect()
+        }
+
+        if places.len() >= max_count {
+            break;
+        }
+    }
+
+    places
 }
 
-async fn async_linker_block(
-    r: Result<Vec<Room>>,
+async fn generate_place(
+    client: &AIClient,
     place_type: PlaceType,
-    p: (String, String),
-) -> (
-    Result<(NodeIndex, UnGraph<Room, ()>, HashMap<String, NodeIndex>)>,
-    (String, String),
-) {
-    if let Ok(r) = r {
-        (
-            link_rooms(&place_type.name(), &place_type.room_type(), &p.0, r).await,
-            p,
-        )
-    } else {
-        (Err(r.unwrap_err()), p)
-    }
+    place_idea: &(String, String),
+) -> Result<Place> {
+    let rooms = generate_rooms(client, place_type, &place_idea).await?;
+    let (entrance, rooms, _) = link_rooms(client, place_type, &place_idea.0, rooms).await?;
+    Ok(Place::new(place_idea.to_owned(), place_type, entrance, rooms.into()))
 }
 
 #[derive(Template, Default)]
 #[template(path = "place_list.md")]
 struct CompletionTemplate<'a> {
     place_type: &'a str,
-} 
+}
 
-async fn generate_place_list(place_type: &str) -> Result<Vec<(String, String)>> {
-    let res = generate(CompletionTemplate { place_type }.to_string()).await?;
+async fn generate_place_list(client: &AIClient, place_type: &str) -> Result<Vec<(String, String)>> {
+    let res = client
+        .generate(CompletionTemplate { place_type }.to_string())
+        .await?;
 
     Ok(extract_md_kv_list(&res))
 }
@@ -80,22 +79,23 @@ struct GenerateRoomsTemplate<'a> {
 }
 
 async fn generate_rooms(
-    place_type: &str,
-    room_type: &str,
-    place: (String, String),
+    client: &AIClient,
+    place_type: PlaceType,
+    place: &(String, String),
 ) -> Result<Vec<Room>> {
     tracing::info!("Generating rooms for {}", place.0);
     let rooms = extract_md_kv_list(
-        &generate(
-            GenerateRoomsTemplate {
-                place_type,
-                place_name: &place.0,
-                place_description: &place.1,
-                room_type,
-            }
-            .to_string(),
-        )
-        .await?,
+        &client
+            .generate(
+                GenerateRoomsTemplate {
+                    place_type: &place_type.name(),
+                    place_name: &place.0,
+                    place_description: &place.1,
+                    room_type: &place_type.room_type(),
+                }
+                .to_string(),
+            )
+            .await?,
     )
     .into_iter()
     .map(|(n, d)| Room::new(n, d))
@@ -104,12 +104,11 @@ async fn generate_rooms(
     Ok(rooms)
 }
 
-#[derive(Template, Default)]
+#[derive(Template)]
 #[template(path = "link_rooms.md")]
 struct LinkRoomsTemplate<'a> {
-    place_type: &'a str,
+    place_type: PlaceType,
     place_name: &'a str,
-    room_type: &'a str,
     rooms: &'a [Room],
 }
 
@@ -120,23 +119,23 @@ struct LinkRoomsOutput {
 }
 
 async fn link_rooms(
-    place_type: &str,
-    room_type: &str,
+    client: &AIClient,
+    place_type: PlaceType,
     place_name: &str,
     rooms: Vec<Room>,
 ) -> Result<(NodeIndex, UnGraph<Room, ()>, HashMap<String, NodeIndex>)> {
     tracing::info!("Linking rooms for {place_name}");
     let links: LinkRoomsOutput = extract_yaml(
-        &generate(
-            LinkRoomsTemplate {
-                place_type,
-                place_name,
-                room_type,
-                rooms: &rooms,
-            }
-            .to_string(),
-        )
-        .await?,
+        &client
+            .generate(
+                LinkRoomsTemplate {
+                    place_type,
+                    place_name,
+                    rooms: &rooms,
+                }
+                .to_string(),
+            )
+            .await?,
     )
     .map_err(|_| AppErrors::AIStructureError)?;
 

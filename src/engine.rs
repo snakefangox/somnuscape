@@ -4,7 +4,7 @@ use crate::{
     commands::{self, Command},
     connections::{EngineConnectionBroker, PlayerConnectionBroker},
     generation::{GenerationReq, GenerationRes, GeneratorHandle},
-    world::{PlaceType, World},
+    mud::world::{PlaceType, World},
     PlayerEntry, Registry,
 };
 
