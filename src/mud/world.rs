@@ -1,13 +1,16 @@
-use petgraph::{graph::NodeIndex, stable_graph::StableUnGraph, visit::EdgeRef};
+use std::collections::{HashMap, HashSet};
+
 use serde::{Deserialize, Serialize};
 
-use crate::state;
+use crate::{state, AppErrors};
 
-type PlaceKey = usize;
+use super::character::Character;
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct World {
-    pub places: Vec<Place>,
+    pub places: HashMap<Location, Place>,
+    pub overworld_locales: Vec<Location>,
+    pub player_characters: HashMap<usize, Character>,
     pub current_tick: u64,
 }
 
@@ -45,107 +48,143 @@ impl World {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Location(PlaceKey, NodeIndex);
+/// A unique key for each Place
+#[derive(
+    Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash,
+)]
+pub struct Location(u128);
 
-/// A physical place in the world, a dungeon, town, etc
+impl Location {
+    /// Generate a new location, ensuring we'll never get 0 which we keep as an invalid location
+    fn new_location() -> Self {
+        let v: u128 = rand::random();
+        Self(v.saturating_add(1))
+    }
+}
+
+/// A physical place in the world, a dungeon, town, etc.
+/// One contiguous space, could be a busy market square or a holy temple's inner sanctum.
+/// If it makes sense to draw battle lines along it's borders, you're on the right track.
+/// Also used for the overland map.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Place {
     pub name: String,
-    pub place_key: PlaceKey,
-    pub place_type: PlaceType,
-    description: String,
-    entrance: NodeIndex,
-    rooms: StableUnGraph<Room, ()>,
+    pub location: Location,
+    pub description: String,
+    pub tags: HashSet<String>,
+    connections: HashMap<Direction, Location>,
 }
 
 impl Place {
-    pub fn new(
-        nd: (String, String),
-        place_type: PlaceType,
-        entrance: NodeIndex,
-        rooms: StableUnGraph<Room, ()>,
-    ) -> Self {
+    pub fn new(name: String, description: String) -> Self {
         Self {
-            name: nd.0,
-            description: nd.1,
-            place_key: 0,
-            place_type,
-            entrance,
-            rooms,
+            name,
+            description,
+            location: Location::new_location(),
+            tags: Default::default(),
+            connections: Default::default(),
         }
     }
 
-    pub fn entrance(&self) -> Location {
-        Location(self.place_key, self.entrance)
+    /// Add a new connection from this place to the provided location.
+    /// Tries the provided direction, picks the first free one if that one is taken.
+    /// Returns the direction used so you can try sync up the other side.
+    pub fn add_connection(
+        &mut self,
+        direction: Direction,
+        location: Location,
+    ) -> Result<Direction, AppErrors> {
+        let directions = Direction::values();
+        if self.connections.len() >= directions.len() {
+            return Err(AppErrors::TooManyConnections(self.location));
+        }
+
+        if self.connections.contains_key(&direction) {
+            let next_dir = directions
+                .iter()
+                .filter(|d| !self.connections.contains_key(&d))
+                .next()
+                .unwrap();
+
+            self.connections.insert(*next_dir, location);
+            Ok(*next_dir)
+        } else {
+            self.connections.insert(direction, location);
+            Ok(direction)
+        }
     }
 
-    pub fn get_room<R: RoomIdx>(&self, idx: R) -> Option<&Room> {
-        self.rooms.node_weight(idx.get_room_idx())
+    /// Checks if a given location is directly adjacent to this one
+    pub fn is_connected(&self, location: Location) -> bool {
+        for (_, l) in &self.connections {
+            if *l == location {
+                return true;
+            }
+        }
+
+        false
     }
 
-    pub fn get_adj_rooms<'a, R: RoomIdx>(&'a self, idx: R) -> impl Iterator<Item = Location> + 'a {
-        self.rooms
-            .edges_directed(idx.get_room_idx(), petgraph::Direction::Outgoing)
-            .map(|e| Location(self.place_key, e.target()))
+    pub fn connections(&self) -> &HashMap<Direction, Location> {
+        &self.connections
+    }
+
+    /// Generates the "look" text for the given place, describing what your character can see
+    pub fn look(&self, world: &World, start: &str) -> String {
+        let mut look_msg = format!("{start} {}\n\n{}\n\n", self.name, self.description);
+        for (dir, loc) in self.connections() {
+            look_msg.push_str(&format!(
+                "Looking {} you see {}\n",
+                dir.name(),
+                world.places[loc].name
+            ));
+        }
+        look_msg
     }
 }
 
-pub trait RoomIdx {
-    fn get_room_idx(&self) -> NodeIndex;
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "kebab-case")]
+pub enum Direction {
+    North,
+    East,
+    South,
+    West,
+    Up,
+    Down,
 }
 
-impl RoomIdx for NodeIndex {
-    fn get_room_idx(&self) -> NodeIndex {
-        *self
-    }
-}
-
-impl RoomIdx for Location {
-    fn get_room_idx(&self) -> NodeIndex {
-        self.1
-    }
-}
-
-/// A contiguous space inside a place, could be a busy market square or a holy temple's inner sanctum
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Room {
-    name: String,
-    description: String,
-}
-
-impl Room {
-    pub fn new(name: String, description: String) -> Self {
-        Self { name, description }
+impl Direction {
+    pub fn values() -> [Self; 6] {
+        [
+            Direction::North,
+            Direction::East,
+            Direction::South,
+            Direction::West,
+            Direction::Up,
+            Direction::Down,
+        ]
     }
 
-    pub fn name(&self) -> &str {
-        &self.name
+    pub fn reverse(self) -> Self {
+        match self {
+            Direction::North => Direction::South,
+            Direction::East => Direction::West,
+            Direction::South => Direction::North,
+            Direction::West => Direction::East,
+            Direction::Up => Direction::Down,
+            Direction::Down => Direction::Up,
+        }
     }
 
-    pub fn description(&self) -> &str {
-        &self.description
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
-pub enum PlaceType {
-    Village,
-    Dungeon,
-}
-
-impl PlaceType {
     pub fn name(self) -> &'static str {
         match self {
-            PlaceType::Village => "village",
-            PlaceType::Dungeon => "dungeon",
-        }
-    }
-
-    pub fn room_type(self) -> &'static str {
-        match self {
-            PlaceType::Village => "building, street or square",
-            PlaceType::Dungeon => "room or corridor",
+            Direction::North => "north",
+            Direction::East => "east",
+            Direction::South => "south",
+            Direction::West => "west",
+            Direction::Up => "up",
+            Direction::Down => "down",
         }
     }
 }

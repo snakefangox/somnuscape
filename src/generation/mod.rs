@@ -1,7 +1,7 @@
 mod bestiary;
 mod place;
 
-use std::hash::{Hash, Hasher};
+use std::{collections::HashMap, hash::{Hash, Hasher}};
 
 use anyhow::Result;
 use crossbeam::channel::{Receiver, Sender, TryRecvError};
@@ -9,15 +9,15 @@ use ollama_rs::{
     generation::{completion::request::GenerationRequest, options::GenerationOptions},
     Ollama,
 };
+use place::PlaceType;
 use rand::{seq::IteratorRandom, SeedableRng};
 use regex::Regex;
 use serde::de::DeserializeOwned;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use crate::{
-    config,
-    mud::world::{Place, PlaceType},
-};
+use crate::{config, mud::world::{Location, Place}};
+
+pub use place::{DUNGEON_PLACE_TYPE, VILLAGE_PLACE_TYPE};
 
 #[derive(Debug)]
 pub struct Generator {
@@ -39,7 +39,7 @@ pub enum GenerationReq {
 
 #[derive(Debug)]
 pub enum GenerationRes {
-    Place(Vec<Place>),
+    Place(Vec<(Place, HashMap<Location, Place>)>),
 }
 
 impl Generator {
@@ -69,7 +69,7 @@ impl Generator {
                 .expect("Gen request channel shouldn't close");
             let res = match req {
                 GenerationReq::Places(place_type, count) => GenerationRes::Place(
-                    place::generate_places(&self.client, place_type, count).await,
+                    place::generate_places(&self.client, &place_type, count).await,
                 ),
             };
 
@@ -117,17 +117,8 @@ impl AIClient {
         }
     }
 
-    pub async fn generate(&self, mut prompt: String) -> Result<String> {
-        let hash: i32 = {
-            let mut h = seahash::SeaHasher::new();
-            prompt.hash(&mut h);
-
-            if self.non_deterministic {
-                h.write_u64(rand::random());
-            }
-
-            h.finish() as i32 // We're happy to chop the value here
-        };
+    pub async fn generate_with_tone(&self, mut prompt: String) -> Result<String> {
+        let hash: i32 = self.make_gen_hash(&prompt);
 
         let mut rng = rand::rngs::StdRng::seed_from_u64((self.seed | hash) as u64);
         let mut tone: String = "\nUse the following tone: ".into();
@@ -145,16 +136,36 @@ impl AIClient {
 
         prompt.push_str(&tone);
 
-        let res = self
+        self.generate(prompt, hash).await
+    }
+
+    pub async fn generate_simple(&self, prompt: String) -> Result<String> {
+        let hash: i32 = self.make_gen_hash(&prompt);
+        self.generate(prompt, hash).await
+    }
+
+    async fn generate(&self, prompt: String, hash: i32) -> Result<String> {
+        Ok(self
             .client
             .generate(
-                GenerationRequest::new("llama3:latest".to_string(), prompt)
-                    .options(GenerationOptions::default().seed(self.seed | hash)),
+                GenerationRequest::new("llama3:latest".to_string(), prompt).options(
+                    GenerationOptions::default()
+                        .seed(self.seed | hash)
+                        .temperature(config::get().model_temperature),
+                ),
             )
             .await?
-            .response;
+            .response)
+    }
 
-        Ok(res)
+    fn make_gen_hash(&self, prompt: &String) -> i32 {
+        let mut h = seahash::SeaHasher::new();
+        prompt.hash(&mut h);
+        if self.non_deterministic {
+            h.write_u64(rand::random());
+        }
+        // We're happy to chop the value here
+        h.finish() as i32
     }
 }
 
@@ -196,7 +207,9 @@ mod test {
     async fn generate_sensible_creatures() {
         let client = AIClient::default();
 
-        let minotaur = CreatureTemplate::stat_new(&client, "minotaur").await.unwrap();
+        let minotaur = CreatureTemplate::stat_new(&client, "minotaur")
+            .await
+            .unwrap();
         assert!(minotaur.attributes.strength > minotaur.attributes.intelligence);
         assert!(minotaur.attributes.toughness > minotaur.attributes.willpower);
 

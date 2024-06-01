@@ -23,7 +23,7 @@ struct StatCreatureTemplate<'a> {
 impl CreatureTemplate {
     pub async fn stat_new(client: &AIClient, creature_name: &str) -> Result<Self> {
         let res = client
-            .generate(
+            .generate_simple(
                 StatCreatureTemplate {
                     creature_name,
                     attributes: &[

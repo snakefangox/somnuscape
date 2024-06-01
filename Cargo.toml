@@ -9,10 +9,8 @@ askama = "0.12.1"
 console-subscriber = "0.2.0"
 crossbeam = { version = "0.8.4", features = ["crossbeam-channel"] }
 futures = "0.3.30"
-mlua = { version = "0.9.8", features = ["luajit", "serialize", "async", "vendored", "macros", "send"] }
 nectar = "0.3.0"
 ollama-rs = "0.1.9"
-petgraph = { version = "0.6.5", features = ["serde-1"] }
 rand = "0.8.5"
 regex = "1.10.4"
 seahash = "4.1.0"

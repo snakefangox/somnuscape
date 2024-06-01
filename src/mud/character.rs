@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use super::world::Location;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Attribute(i32);
@@ -110,10 +112,11 @@ impl Inventory {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", default)]
 pub struct Character {
     pub name: String,
+    pub location: Location,
     pub health: u32,
     pub attributes: Attributes,
     pub inventory: Inventory,

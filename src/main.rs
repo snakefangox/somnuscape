@@ -14,6 +14,7 @@ use connections::{EngineConnection, PlayerConnectionBroker};
 use engine::Engine;
 use futures::{SinkExt, StreamExt};
 use generation::Generator;
+use mud::world::Location;
 use nectar::{event::TelnetEvent, TelnetCodec};
 use serde::{Deserialize, Serialize};
 use state::Registry;
@@ -197,6 +198,7 @@ impl ConnectionState {
 #[derive(Debug, PartialEq)]
 pub enum AppErrors {
     PlayerDisconnected(usize),
+    TooManyConnections(Location),
     AIStructureError,
 }
 
@@ -206,6 +208,7 @@ impl Display for AppErrors {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             AppErrors::PlayerDisconnected(_) => f.write_str("Player Disconnected"),
+            AppErrors::TooManyConnections(l) => f.write_fmt(format_args!("To many connections to place {l:?}")),
             AppErrors::AIStructureError => f.write_str("AI Structure Error"),
         }
     }

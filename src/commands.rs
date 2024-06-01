@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::engine::Engine;
+use crate::{engine::Engine, mud::world::Direction};
 
 pub type CmdFn = Box<dyn Fn(&mut Engine, usize, &mut dyn Iterator<Item = &str>)>;
 
@@ -27,7 +27,92 @@ impl Command {
 }
 
 pub fn base_commands() -> Vec<Rc<Command>> {
-    vec![help_command().into(), quit_command().into()]
+    let mut base = vec![
+        help_command().into(),
+        quit_command().into(),
+        look_command().into(),
+    ];
+    base.extend(move_commands());
+    base
+}
+
+pub fn look_command() -> Command {
+    Command::new(
+        "look",
+        &["l"],
+        "",
+        Box::new(|engine, player, _| {
+            let player_character = engine.world.player_characters.entry(player).or_default();
+
+            if let Some(place) = engine.world.places.get(&player_character.location) {
+                let look_msg = place.look(&engine.world, "You're standing in");
+
+                engine
+                    .connection_broker
+                    .send_player_message(player, look_msg);
+            } else {
+                engine.connection_broker.send_player_message(
+                    player,
+                    "Invalid location, resetting to start".to_string(),
+                );
+                player_character.location = engine
+                    .world
+                    .overworld_locales
+                    .first()
+                    .map(|l| *l)
+                    .unwrap_or_default();
+            }
+        }),
+    )
+}
+
+pub fn move_commands() -> Vec<Rc<Command>> {
+    let mut move_commands = Vec::new();
+
+    for direction in Direction::values() {
+        let cmd = Command::new(
+            &direction.name(),
+            &[&direction.name()[0..1]],
+            "",
+            Box::new(move |engine, player, _| {
+                let player_character = engine.world.player_characters.entry(player).or_default();
+
+                if let Some(place) = engine.world.places.get(&player_character.location) {
+                    match place.connections().get(&direction) {
+                        Some(l) => {
+                            player_character.location = *l;
+                            let new_place = &engine.world.places[l];
+                            engine.connection_broker.send_player_message(
+                                player,
+                                new_place.look(&engine.world, "You move to"),
+                            );
+                        }
+                        None => {
+                            engine.connection_broker.send_player_message(
+                                player,
+                                format!("You cannot go {direction:?} from here"),
+                            );
+                        }
+                    }
+                } else {
+                    engine.connection_broker.send_player_message(
+                        player,
+                        "Invalid location, resetting to start".to_string(),
+                    );
+                    player_character.location = engine
+                        .world
+                        .overworld_locales
+                        .first()
+                        .map(|l| *l)
+                        .unwrap_or_default();
+                }
+            }),
+        );
+
+        move_commands.push(cmd.into());
+    }
+
+    move_commands
 }
 
 pub fn quit_command() -> Command {

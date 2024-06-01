@@ -1,10 +1,10 @@
-use std::{rc::Rc, time::Duration};
+use std::{collections::HashMap, rc::Rc, time::Duration};
 
 use crate::{
     commands::{self, Command},
     connections::{EngineConnectionBroker, PlayerConnectionBroker},
     generation::{GenerationReq, GenerationRes, GeneratorHandle},
-    mud::world::{PlaceType, World},
+    mud::world::{Direction, Location, Place, World},
     PlayerEntry, Registry,
 };
 
@@ -107,24 +107,51 @@ pub fn get_close_commands<'a>(input: &str, commands: &'a Vec<Rc<Command>>) -> St
 fn incorperate_generation(engine: &mut Engine) {
     while let Some(r) = engine.gen_handle.get_responses() {
         match r {
-            GenerationRes::Place(places) => places.into_iter().for_each(|p| engine.world.places.push(p)),
+            GenerationRes::Place(places) => places
+                .into_iter()
+                .for_each(|(place, rooms)| add_new_locale(engine, place, rooms)),
         }
     }
 }
 
-fn startup_generation(engine: &mut Engine) {
-    let villages = engine.world.places.iter().filter(|p| p.place_type == PlaceType::Village).count();
-    let dungeons = engine.world.places.iter().filter(|p| p.place_type == PlaceType::Dungeon).count();
-
-    if villages < 3 {
-        let count = 3 - villages;
-        tracing::info!("Requesting {count} new villages");
-        engine.gen_handle.request_generate(GenerationReq::Places(PlaceType::Village, count));
+/// Add a new overworld map entry to the world and connect it to existing entries
+fn add_new_locale(engine: &mut Engine, mut place: Place, rooms: HashMap<Location, Place>) {
+    for ow_location in &engine.world.overworld_locales {
+        let ow_place = engine.world.places.get_mut(ow_location).unwrap();
+        // Limit to 5 connections to avoid adding up
+        if ow_place.connections().len() < 5 {
+            let dir = ow_place
+                .add_connection(Direction::North, place.location)
+                .expect("Should be able to add overworld connection");
+            place
+                .add_connection(dir.reverse(), *ow_location)
+                .expect("Should be able to add overworld connection");
+            break;
+        }
     }
 
-    if dungeons < 5 {
-        let count = 5 - dungeons;
+    engine.world.overworld_locales.push(place.location);
+    engine.world.places.insert(place.location, place);
+
+    for (location, room) in rooms.into_iter() {
+        engine.world.places.insert(location, room);
+    }
+}
+
+fn startup_generation(engine: &mut Engine) {
+    if engine.world.places.len() == 0 {
+        let count = 3;
+        tracing::info!("Requesting {count} new villages");
+        engine.gen_handle.request_generate(GenerationReq::Places(
+            crate::generation::VILLAGE_PLACE_TYPE,
+            count,
+        ));
+
+        let count = 5;
         tracing::info!("Requesting {count} new dungeons");
-        engine.gen_handle.request_generate(GenerationReq::Places(PlaceType::Dungeon, count));
+        engine.gen_handle.request_generate(GenerationReq::Places(
+            crate::generation::DUNGEON_PLACE_TYPE,
+            count,
+        ));
     }
 }

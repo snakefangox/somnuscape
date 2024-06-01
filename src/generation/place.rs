@@ -2,14 +2,12 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use askama::Template;
-use petgraph::graph::{NodeIndex, UnGraph};
-use rand::seq::IteratorRandom;
 use serde::Deserialize;
 
 use crate::{
     filters,
     generation::{extract_md_kv_list, extract_yaml},
-    mud::world::{Place, PlaceType, Room},
+    mud::world::{Direction, Location, Place},
     AppErrors,
 };
 
@@ -17,14 +15,14 @@ use super::AIClient;
 
 pub async fn generate_places(
     client: &AIClient,
-    place_type: PlaceType,
+    place_type: &PlaceType,
     max_count: usize,
-) -> Vec<Place> {
-    tracing::info!("Generating up to {max_count} {place_type:?}s");
+) -> Vec<(Place, HashMap<Location, Place>)> {
+    tracing::info!("Generating up to {} {}s", max_count, place_type.name);
 
     let mut places = Vec::new();
     loop {
-        let place_ideas = generate_place_list(client, &place_type.name())
+        let place_ideas = generate_place_list(client, &place_type.name)
             .await
             .unwrap_or_default()
             .into_iter()
@@ -47,12 +45,20 @@ pub async fn generate_places(
 
 async fn generate_place(
     client: &AIClient,
-    place_type: PlaceType,
+    place_type: &PlaceType,
     place_idea: &(String, String),
-) -> Result<Place> {
+) -> Result<(Place, HashMap<Location, Place>)> {
     let rooms = generate_rooms(client, place_type, &place_idea).await?;
-    let (entrance, rooms, _) = link_rooms(client, place_type, &place_idea.0, rooms).await?;
-    Ok(Place::new(place_idea.to_owned(), place_type, entrance, rooms.into()))
+    let mut overworld_place = Place::new(format!("Overworld - {}", place_idea.0), place_idea.1.to_owned());
+    let (entrance, mut rooms) = link_rooms(client, place_type, &place_idea.0, rooms).await?;
+
+    overworld_place.add_connection(Direction::Down, entrance)?;
+    rooms
+        .get_mut(&entrance)
+        .unwrap()
+        .add_connection(Direction::Up, overworld_place.location)?;
+
+    Ok((overworld_place, rooms))
 }
 
 #[derive(Template, Default)]
@@ -63,7 +69,7 @@ struct CompletionTemplate<'a> {
 
 async fn generate_place_list(client: &AIClient, place_type: &str) -> Result<Vec<(String, String)>> {
     let res = client
-        .generate(CompletionTemplate { place_type }.to_string())
+        .generate_with_tone(CompletionTemplate { place_type }.to_string())
         .await?;
 
     Ok(extract_md_kv_list(&res))
@@ -80,25 +86,25 @@ struct GenerateRoomsTemplate<'a> {
 
 async fn generate_rooms(
     client: &AIClient,
-    place_type: PlaceType,
+    place_type: &PlaceType,
     place: &(String, String),
-) -> Result<Vec<Room>> {
+) -> Result<Vec<Place>> {
     tracing::info!("Generating rooms for {}", place.0);
     let rooms = extract_md_kv_list(
         &client
-            .generate(
+            .generate_with_tone(
                 GenerateRoomsTemplate {
-                    place_type: &place_type.name(),
+                    place_type: &place_type.name,
                     place_name: &place.0,
                     place_description: &place.1,
-                    room_type: &place_type.room_type(),
+                    room_type: &place_type.room_type,
                 }
                 .to_string(),
             )
             .await?,
     )
     .into_iter()
-    .map(|(n, d)| Room::new(n, d))
+    .map(|(n, d)| Place::new(n, d))
     .collect();
 
     Ok(rooms)
@@ -107,9 +113,9 @@ async fn generate_rooms(
 #[derive(Template)]
 #[template(path = "link_rooms.md")]
 struct LinkRoomsTemplate<'a> {
-    place_type: PlaceType,
+    place_type: &'a PlaceType,
     place_name: &'a str,
-    rooms: &'a [Room],
+    rooms: &'a [Place],
 }
 
 #[derive(Debug, Deserialize)]
@@ -120,14 +126,15 @@ struct LinkRoomsOutput {
 
 async fn link_rooms(
     client: &AIClient,
-    place_type: PlaceType,
+    place_type: &PlaceType,
     place_name: &str,
-    rooms: Vec<Room>,
-) -> Result<(NodeIndex, UnGraph<Room, ()>, HashMap<String, NodeIndex>)> {
+    rooms: Vec<Place>,
+) -> Result<(Location, HashMap<Location, Place>)> {
     tracing::info!("Linking rooms for {place_name}");
+
     let links: LinkRoomsOutput = extract_yaml(
         &client
-            .generate(
+            .generate_simple(
                 LinkRoomsTemplate {
                     place_type,
                     place_name,
@@ -139,18 +146,28 @@ async fn link_rooms(
     )
     .map_err(|_| AppErrors::AIStructureError)?;
 
-    let mut graph = UnGraph::new_undirected();
-    let name_to_node_idx: HashMap<_, _> = rooms
-        .into_iter()
-        .map(|r| (r.name().to_string(), graph.add_node(r)))
+    let mut rooms: HashMap<_, _> = rooms.into_iter().map(|r| (r.location, r)).collect();
+    let name_to_location: HashMap<_, _> = rooms
+        .iter()
+        .map(|(l, r)| (r.name.to_string(), *l))
         .collect();
 
     for (node, connections) in &links.connections {
-        if let Some(a) = name_to_node_idx.get(node) {
+        if let Some(a) = name_to_location.get(node) {
             for con in connections {
-                if let Some(b) = name_to_node_idx.get(con) {
-                    if !graph.contains_edge(*a, *b) {
-                        graph.add_edge(*a, *b, ());
+                if let Some(b) = name_to_location.get(con) {
+                    if !rooms[a].is_connected(*b) {
+                        let dir = rooms
+                            .get_mut(a)
+                            .unwrap()
+                            .add_connection(Direction::North, *b)
+                            .map_err(|_| AppErrors::AIStructureError)?;
+
+                        rooms
+                            .get_mut(b)
+                            .unwrap()
+                            .add_connection(dir.reverse(), *a)
+                            .map_err(|_| AppErrors::AIStructureError)?;
                     }
                 }
             }
@@ -158,22 +175,27 @@ async fn link_rooms(
     }
 
     let entrance = links.entrance.trim().to_string();
-    let entrance_idx = *name_to_node_idx
+    let entrance_idx = *name_to_location
         .get(&entrance)
         .ok_or(AppErrors::AIStructureError)?;
 
-    for node in graph.node_indices() {
-        if !petgraph::algo::has_path_connecting(&graph, entrance_idx, node, None) {
-            graph.add_edge(
-                graph
-                    .node_indices()
-                    .choose(&mut rand::thread_rng())
-                    .unwrap(),
-                node,
-                (),
-            );
-        }
-    }
-
-    Ok((entrance_idx, graph, name_to_node_idx))
+    Ok((entrance_idx, rooms))
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlaceType {
+    name: &'static str,
+    room_type: &'static str,
+    room_types_pural: &'static str,
+}
+
+pub const DUNGEON_PLACE_TYPE: PlaceType = PlaceType {
+    name: "dungeon",
+    room_type: "room or corridor",
+    room_types_pural: "rooms or corridors",
+};
+pub const VILLAGE_PLACE_TYPE: PlaceType = PlaceType {
+    name: "village",
+    room_type: "building or street",
+    room_types_pural: "buildings or streets",
+};
