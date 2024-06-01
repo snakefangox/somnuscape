@@ -2,8 +2,8 @@ mod characters;
 mod commands;
 mod connections;
 mod engine;
-mod state;
 mod generation;
+mod state;
 mod world;
 
 use std::net::SocketAddr;
@@ -13,6 +13,7 @@ use anyhow::Result;
 use connections::{EngineConnection, PlayerConnectionBroker};
 use engine::Engine;
 use futures::{SinkExt, StreamExt};
+use generation::Generator;
 use nectar::{event::TelnetEvent, TelnetCodec};
 use serde::{Deserialize, Serialize};
 use state::Registry;
@@ -24,7 +25,10 @@ async fn main() -> Result<()> {
     console_subscriber::init();
 
     let players: Registry<PlayerEntry> = Registry::load_or_new("player-registry.yaml").await?;
-    let engine_msg_handler = Engine::start_engine(players.clone());
+    let (mut gen, gen_handle) = Generator::new();
+    tokio::spawn(async move { gen.run().await });
+
+    let engine_msg_handler = Engine::start_engine(players.clone(), gen_handle);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 5000));
     let listener = TcpListener::bind(addr).await?;

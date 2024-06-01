@@ -11,7 +11,7 @@ use crate::{
     filters, generation::{extract_md_kv_list, extract_yaml, generate}, world::{Place, PlaceType, Room}, AppErrors
 };
 
-async fn generate_places(place_type: PlaceType, max_count: usize) -> Vec<Place> {
+pub async fn generate_places(place_type: PlaceType, max_count: usize) -> Vec<Place> {
     tracing::info!("Generating up to {max_count} {place_type:?}s");
     let place_ideas = generate_place_list(&place_type.name())
         .await
@@ -32,7 +32,7 @@ async fn generate_places(place_type: PlaceType, max_count: usize) -> Vec<Place> 
         .into_iter()
         .filter_map(|(r, p)| {
             if let Ok(r) = r {
-                Some(Place::new(p, place_type, r.0, r.1))
+                Some(Place::new(p, place_type, r.0, r.1.into()))
             } else {
                 None
             }

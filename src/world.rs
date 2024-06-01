@@ -1,11 +1,48 @@
-
-use petgraph::{
-    graph::{NodeIndex, UnGraph},
-    visit::EdgeRef,
-};
+use petgraph::{graph::NodeIndex, stable_graph::StableUnGraph, visit::EdgeRef};
 use serde::{Deserialize, Serialize};
 
+use crate::state;
+
 type PlaceKey = usize;
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct World {
+    pub places: Vec<Place>,
+    pub current_tick: u64,
+}
+
+impl World {
+    pub fn load_or_default() -> Self {
+        let p = state::make_save_path("world.yaml");
+        if p.try_exists().unwrap_or_default() {
+            std::fs::read_to_string(p)
+                .and_then(|y| Ok(serde_yaml::from_str(&y)))
+                .expect("Could not read save file")
+                .expect("Could not deserialize")
+        } else {
+            Self::default()
+        }
+    }
+    /// Increment the current tick count and then check and save if needed
+    pub fn check_save(&mut self, interval: u64) {
+        self.current_tick += 1;
+
+        if self.current_tick % interval == 0 {
+            let world_copy = self.clone();
+            std::thread::spawn(move || {
+                let yaml = serde_yaml::to_string(&world_copy);
+                let save = match yaml {
+                    Ok(y) => std::fs::write(state::make_save_path("world.yaml"), y),
+                    Err(e) => Ok(tracing::error!("Error serializing world: {e}")),
+                };
+
+                if let Err(e) = save {
+                    tracing::error!("Error saving world: {e}");
+                }
+            });
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Location(PlaceKey, NodeIndex);
@@ -13,12 +50,12 @@ pub struct Location(PlaceKey, NodeIndex);
 /// A physical place in the world, a dungeon, town, etc
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Place {
-    name: String,
-    place_key: PlaceKey,
-    place_type: PlaceType,
+    pub name: String,
+    pub place_key: PlaceKey,
+    pub place_type: PlaceType,
     description: String,
     entrance: NodeIndex,
-    rooms: UnGraph<Room, ()>,
+    rooms: StableUnGraph<Room, ()>,
 }
 
 impl Place {
@@ -26,7 +63,7 @@ impl Place {
         nd: (String, String),
         place_type: PlaceType,
         entrance: NodeIndex,
-        rooms: UnGraph<Room, ()>,
+        rooms: StableUnGraph<Room, ()>,
     ) -> Self {
         Self {
             name: nd.0,
@@ -50,20 +87,6 @@ impl Place {
         self.rooms
             .edges_directed(idx.get_room_idx(), petgraph::Direction::Outgoing)
             .map(|e| Location(self.place_key, e.target()))
-    }
-
-    pub fn place_type(&self) -> PlaceType {
-        self.place_type
-    }
-
-    pub(super) fn store(mut self, place_key: PlaceKey) -> Self {
-        self.place_key = place_key;
-
-        self
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
     }
 }
 

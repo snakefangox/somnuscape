@@ -5,6 +5,7 @@ Provide a brief explanation of your reasoning and then provide a YAML stat block
 name: {{ creature_name }}
 attributes:
 {% for attribute in attributes -%}
-  {{ attribute }}: <A number>
+  {{ attribute }}: <A flat ability score, not a modifier>
 {%- endfor %}
+items: <A list of weapons, armor and treasure the creature carries>
 ```

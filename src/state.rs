@@ -12,8 +12,7 @@ pub struct Registry<T>(Arc<RwLock<Vec<T>>>, PathBuf);
 
 impl<T: for<'a> Deserialize<'a> + Serialize> Registry<T> {
     pub async fn load_or_new(filename: &str) -> anyhow::Result<Self> {
-        let mut path: PathBuf = STATE_DIR.into();
-        path.push(filename);
+        let path = make_save_path(filename);
 
         let values = if tokio::fs::try_exists(&path).await.is_ok_and(|r| r) {
             let yaml = tokio::fs::read_to_string(&path).await?;
@@ -46,4 +45,10 @@ impl<T: for<'a> Deserialize<'a> + Serialize> Registry<T> {
     pub fn blocking_read(&self) -> RwLockReadGuard<Vec<T>> {
         self.0.blocking_read()
     }
+}
+
+pub fn make_save_path(filename: &str) -> PathBuf {
+    let mut path: PathBuf = STATE_DIR.into();
+    path.push(filename);
+    path
 }

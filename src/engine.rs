@@ -3,26 +3,37 @@ use std::{rc::Rc, time::Duration};
 use crate::{
     commands::{self, Command},
     connections::{EngineConnectionBroker, PlayerConnectionBroker},
+    generation::{GenerationReq, GenerationRes, GeneratorHandle},
+    world::{PlaceType, World},
     PlayerEntry, Registry,
 };
 
-/// All the engine state kept between frames, including world info
+/// All the engine state kept between ticks, including world info
 pub struct Engine {
     pub connection_broker: EngineConnectionBroker,
     pub player_registry: Registry<PlayerEntry>,
+    pub gen_handle: GeneratorHandle,
     pub commands: Vec<Rc<Command>>,
+    pub world: World,
 }
 
 impl Engine {
-    pub fn start_engine(player_registry: Registry<PlayerEntry>) -> PlayerConnectionBroker {
+    pub fn start_engine(
+        player_registry: Registry<PlayerEntry>,
+        gen_handle: GeneratorHandle,
+    ) -> PlayerConnectionBroker {
         let (player_connection_broker, connection_broker) = PlayerConnectionBroker::new();
 
         std::thread::spawn(move || {
-            let mud = Engine {
+            let mut mud = Engine {
                 player_registry,
                 connection_broker,
+                gen_handle,
                 commands: commands::base_commands(),
+                world: World::load_or_default(),
             };
+
+            startup_generation(&mut mud);
 
             run_engine(mud);
         });
@@ -52,6 +63,11 @@ fn run_engine(mut engine: Engine) -> ! {
                 };
             }
         }
+
+        incorperate_generation(&mut engine);
+
+        // Try save world every 10 seconds
+        engine.world.check_save(10 * 20);
     }
 }
 
@@ -86,4 +102,29 @@ pub fn get_close_commands<'a>(input: &str, commands: &'a Vec<Rc<Command>>) -> St
     }
 
     res
+}
+
+fn incorperate_generation(engine: &mut Engine) {
+    while let Some(r) = engine.gen_handle.get_responses() {
+        match r {
+            GenerationRes::Place(places) => places.into_iter().for_each(|p| engine.world.places.push(p)),
+        }
+    }
+}
+
+fn startup_generation(engine: &mut Engine) {
+    let villages = engine.world.places.iter().filter(|p| p.place_type == PlaceType::Village).count();
+    let dungeons = engine.world.places.iter().filter(|p| p.place_type == PlaceType::Dungeon).count();
+
+    if villages < 3 {
+        let count = 3 - villages;
+        tracing::info!("Requesting {count} new villages");
+        engine.gen_handle.request_generate(GenerationReq::Places(PlaceType::Village, count));
+    }
+
+    if dungeons < 5 {
+        let count = 5 - dungeons;
+        tracing::info!("Requesting {count} new dungeons");
+        engine.gen_handle.request_generate(GenerationReq::Places(PlaceType::Dungeon, count));
+    }
 }
