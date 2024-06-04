@@ -1,10 +1,10 @@
 mod commands;
+mod config;
 mod connections;
 mod engine;
 mod generation;
-mod state;
 mod mud;
-mod config;
+mod state;
 
 use std::net::SocketAddr;
 use std::{error::Error, fmt::Display};
@@ -27,11 +27,16 @@ async fn main() -> Result<()> {
 
     let players: Registry<PlayerEntry> = Registry::load_or_new("player-registry.yaml").await?;
     let (mut gen, gen_handle) = Generator::new();
-    tokio::spawn(async move { gen.run().await; });
+    tokio::spawn(async move {
+        gen.run().await;
+    });
 
     let engine_msg_handler = Engine::start_engine(players.clone(), gen_handle);
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 5000));
+    let addr: SocketAddr = config::get()
+        .server_address
+        .parse()
+        .expect("Server address should be a valid <ip:port>");
     let listener = TcpListener::bind(addr).await?;
 
     loop {
@@ -208,7 +213,9 @@ impl Display for AppErrors {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             AppErrors::PlayerDisconnected(_) => f.write_str("Player Disconnected"),
-            AppErrors::TooManyConnections(l) => f.write_fmt(format_args!("To many connections to place {l:?}")),
+            AppErrors::TooManyConnections(l) => {
+                f.write_fmt(format_args!("To many connections to place {l:?}"))
+            }
             AppErrors::AIStructureError => f.write_str("AI Structure Error"),
         }
     }

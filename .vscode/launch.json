@@ -34,7 +34,8 @@
                     "test",
                     "--no-run",
                     "--bin=somnuscape",
-                    "--package=somnuscape"
+                    "--package=somnuscape",
+                    "--include-ignored"
                 ],
                 "filter": {
                     "name": "somnuscape",

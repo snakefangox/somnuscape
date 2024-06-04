@@ -1,8 +1,8 @@
-use std::rc::Rc;
+use std::sync::OnceLock;
 
 use crate::{engine::Engine, mud::world::Direction};
 
-pub type CmdFn = Box<dyn Fn(&mut Engine, usize, &mut dyn Iterator<Item = &str>)>;
+pub type CmdFn = Box<dyn Fn(&mut Engine, usize, &mut dyn Iterator<Item = &str>) + Send + Sync>;
 
 pub struct Command {
     pub name: String,
@@ -26,21 +26,25 @@ impl Command {
     }
 }
 
-pub fn base_commands() -> Vec<Rc<Command>> {
-    let mut base = vec![
-        help_command().into(),
-        quit_command().into(),
-        look_command().into(),
-    ];
-    base.extend(move_commands());
-    base
+pub fn get_command_list() -> &'static Vec<Command> {
+    static COMMANDS: OnceLock<Vec<Command>> = OnceLock::new();
+
+    COMMANDS.get_or_init(|| {
+        let mut base = vec![
+            help_command().into(),
+            quit_command().into(),
+            look_command().into(),
+        ];
+        base.extend(move_commands());
+        base
+    })
 }
 
 pub fn look_command() -> Command {
     Command::new(
         "look",
         &["l"],
-        "",
+        "Describes your surroundings to you",
         Box::new(|engine, player, _| {
             let player_character = engine.world.player_characters.entry(player).or_default();
 
@@ -66,14 +70,17 @@ pub fn look_command() -> Command {
     )
 }
 
-pub fn move_commands() -> Vec<Rc<Command>> {
+pub fn move_commands() -> Vec<Command> {
     let mut move_commands = Vec::new();
 
     for direction in Direction::values() {
         let cmd = Command::new(
             &direction.name(),
             &[&direction.name()[0..1]],
-            "",
+            &format!(
+                "Moves your character {} and describes where you end up",
+                direction.name()
+            ),
             Box::new(move |engine, player, _| {
                 let player_character = engine.world.player_characters.entry(player).or_default();
 
@@ -109,7 +116,7 @@ pub fn move_commands() -> Vec<Rc<Command>> {
             }),
         );
 
-        move_commands.push(cmd.into());
+        move_commands.push(cmd);
     }
 
     move_commands
@@ -119,7 +126,7 @@ pub fn quit_command() -> Command {
     Command::new(
         "quit",
         &["exit"],
-        "",
+        "Log your character out of the game world and exit the session",
         Box::new(|engine, player, _| {
             let player_reg = engine.player_registry.blocking_read();
             let name = player_reg
@@ -139,11 +146,11 @@ pub fn help_command() -> Command {
     Command::new(
         "help",
         &["?"],
-        "",
+        "Provides a list of commands when run alone or help for a specific command when one is provided after, like you just did :)",
         Box::new(|engine, player, args| {
             let res = match args.next() {
                 Some(cmd) => {
-                    let cmd_help = engine.commands.iter().find(|c| c.match_name(cmd));
+                    let cmd_help = get_command_list().iter().find(|c| c.match_name(cmd));
 
                     if let Some(cmd_help) = cmd_help {
                         let mut res = String::new();
@@ -171,7 +178,7 @@ pub fn help_command() -> Command {
                     let mut res = String::new();
                     res.push_str("Listing all commands\nRun 'help <command name>' to get help for a specific command\n\n");
                     let mut count = 0;
-                    for cmd in &engine.commands {
+                    for cmd in get_command_list() {
                         res.push_str(&format!("{:20}", cmd.name));
                         count += 1;
                         if count % 4 == 0 {

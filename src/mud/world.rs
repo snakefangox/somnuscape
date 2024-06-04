@@ -1,12 +1,17 @@
-use std::collections::{HashMap, HashSet};
+use core::fmt;
+use std::{collections::{HashMap, HashSet}, fmt::{Debug, Display}};
 
-use serde::{Deserialize, Serialize};
+use serde::{
+    de::{self, Visitor},
+    Deserialize, Deserializer, Serialize, Serializer,
+};
 
 use crate::{state, AppErrors};
 
 use super::character::Character;
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct World {
     pub places: HashMap<Location, Place>,
     pub overworld_locales: Vec<Location>,
@@ -28,45 +33,33 @@ impl World {
     }
 
     /// Increment the current tick count and then check and save if needed
-    pub fn check_save(&mut self, interval: u64) {
+    pub fn tick_and_check_save(&mut self, interval: u64) {
         self.current_tick += 1;
 
         if self.current_tick % interval == 0 {
             let world_copy = self.clone();
+            // We don't have an async context to use for IO here so save on a seperate thread
             std::thread::spawn(move || {
                 let yaml = serde_yaml::to_string(&world_copy);
                 let save = match yaml {
                     Ok(y) => std::fs::write(state::make_save_path("world.yaml"), y),
-                    Err(e) => Ok(tracing::error!("Error serializing world: {e}")),
+                    Err(e) => Ok(tracing::error!("Failed serializing world: {e}")),
                 };
 
                 if let Err(e) = save {
-                    tracing::error!("Error saving world: {e}");
+                    tracing::error!("Failed saving world: {e}");
                 }
             });
         }
     }
 }
 
-/// A unique key for each Place
-#[derive(
-    Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash,
-)]
-pub struct Location(u128);
-
-impl Location {
-    /// Generate a new location, ensuring we'll never get 0 which we keep as an invalid location
-    fn new_location() -> Self {
-        let v: u128 = rand::random();
-        Self(v.saturating_add(1))
-    }
-}
-
-/// A physical place in the world, a dungeon, town, etc.
+/// A physical place in the world, a dungeon, town hall, etc.
 /// One contiguous space, could be a busy market square or a holy temple's inner sanctum.
 /// If it makes sense to draw battle lines along it's borders, you're on the right track.
 /// Also used for the overland map.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct Place {
     pub name: String,
     pub location: Location,
@@ -142,6 +135,73 @@ impl Place {
     }
 }
 
+/// A unique key for each Place. It's default state is invalid,
+/// to get a valid new Location call `new_location`.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct Location(u128);
+
+impl Location {
+    /// Generate a new location, ensuring we'll never get 0 which we
+    /// consider invalid.
+    fn new_location() -> Self {
+        let v: u128 = rand::random();
+        Self(v.saturating_add(1))
+    }
+}
+
+impl Display for Location {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let location = self.0;
+        f.write_fmt(format_args!("Location ({location:x})"))
+    }
+}
+
+impl Debug for Location {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        Display::fmt(&self, f)
+    }
+}
+
+/// We serialize `Location` as a hex string which is less efficient but looks much better
+struct LocationVisitor;
+
+impl<'de> Visitor<'de> for LocationVisitor {
+    type Value = Location;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("A hex string representing a u128 integer")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(Location(u128::from_str_radix(v, 16).map_err(|e| {
+            E::custom(format!("could not parse hex string: {e}"))
+        })?))
+    }
+}
+
+impl Serialize for Location {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let location = self.0;
+        serializer.serialize_str(&format!("{location:x}"))
+    }
+}
+
+impl<'de> Deserialize<'de> for Location {
+    fn deserialize<D>(deserializer: D) -> Result<Location, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_str(LocationVisitor)
+    }
+}
+
+/// Represents the directions that players can move
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "kebab-case")]
 pub enum Direction {

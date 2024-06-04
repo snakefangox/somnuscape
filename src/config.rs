@@ -5,6 +5,7 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct SomnuscapeConfig {
+    pub server_address: String,
     pub save_every_x_ticks: u64,
     pub ticks_per_second: f64,
     pub model_temperature: f32,
@@ -15,6 +16,7 @@ pub struct SomnuscapeConfig {
 impl Default for SomnuscapeConfig {
     fn default() -> Self {
         Self {
+            server_address: "0.0.0.0:5000".into(),
             model_temperature: 0.9,
             tone_words: vec![
                 "mystical".into(),

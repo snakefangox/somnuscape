@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc, time::Duration};
+use std::{collections::HashMap, time::Duration};
 
 use crate::{
     commands::{self, Command},
@@ -14,7 +14,6 @@ pub struct Engine {
     pub connection_broker: EngineConnectionBroker,
     pub player_registry: Registry<PlayerEntry>,
     pub gen_handle: GeneratorHandle,
-    pub commands: Vec<Rc<Command>>,
     pub world: World,
 }
 
@@ -30,7 +29,6 @@ impl Engine {
                 player_registry,
                 connection_broker,
                 gen_handle,
-                commands: commands::base_commands(),
                 world: World::load_or_default(),
             };
 
@@ -47,49 +45,49 @@ fn run_engine(mut engine: Engine) -> ! {
     let tick_period = Duration::from_secs_f64(1.0 / config::get().ticks_per_second);
     let tick_duration = crossbeam::channel::tick(tick_period);
 
+    // Core game loop
     loop {
+        // Wait for a tick from the channel
         tick_duration.recv().expect("Tick channel should not close");
 
+        // Add new players and remove disconnected ones
         engine.connection_broker.handle_connection_changes();
 
-        while let Some((player, msg)) = engine.connection_broker.poll_player_messages() {
-            let mut args_iter = msg.split_whitespace();
-            if let Some(cmd) = args_iter.next() {
-                let c = engine.commands.iter().find(|c| c.match_name(cmd)).cloned();
-                match c {
-                    Some(cmd) => (cmd.cmd_fn)(&mut engine, player, &mut args_iter),
-                    None => engine
-                        .connection_broker
-                        .send_player_message(player, get_close_commands(cmd, &engine.commands)),
-                };
-            }
-        }
+        // Get and handle player messages
+        handle_player_commands(&mut engine);
 
+        // Add generation results to the world
         incorperate_generation(&mut engine);
 
-        engine.world.check_save(config::get().save_every_x_ticks);
+        // Increment the world time and save if needed
+        engine
+            .world
+            .tick_and_check_save(config::get().save_every_x_ticks);
     }
 }
 
-pub fn get_close_commands<'a>(input: &str, commands: &'a Vec<Rc<Command>>) -> String {
-    let mut closest = Vec::new();
-    for cmd in commands {
-        let name_dist = strsim::levenshtein(input, &cmd.name);
-        let alias_min = cmd
-            .aliases
-            .iter()
-            .map(|s| (s, strsim::levenshtein(input, &s)))
-            .min_by_key(|(_, d)| *d);
+fn handle_player_commands(engine: &mut Engine) {
+    let command_list = commands::get_command_list();
 
-        if let Some((alias, alias_dist)) = alias_min {
-            if alias_dist < name_dist {
-                closest.push((alias.as_str(), alias_dist));
-                continue;
-            }
+    while let Some((player, msg)) = engine.connection_broker.poll_player_messages() {
+        let mut args_iter = msg.split_whitespace();
+        if let Some(cmd) = args_iter.next() {
+            let c = command_list.iter().find(|c| c.match_name(cmd));
+            match c {
+                Some(cmd) => (cmd.cmd_fn)(engine, player, &mut args_iter),
+                None => engine
+                    .connection_broker
+                    .send_player_message(player, get_close_commands(cmd, command_list)),
+            };
         }
-
-        closest.push((cmd.name.as_str(), name_dist));
     }
+}
+
+pub fn get_close_commands<'a>(input: &str, commands: &'a Vec<Command>) -> String {
+    let mut closest: Vec<(&str, usize)> = commands
+        .iter()
+        .map(|c| (c.name.as_str(), strsim::levenshtein(input, &c.name)))
+        .collect();
 
     closest.sort_by_key(|(_, d)| *d);
 
