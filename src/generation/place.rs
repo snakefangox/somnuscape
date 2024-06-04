@@ -1,8 +1,8 @@
-use std::{collections::HashMap, pin::Pin, task::{Context, Poll}};
+use std::collections::HashMap;
 
 use anyhow::Result;
 use askama::Template;
-use futures::Stream;
+use futures::{stream, Stream, StreamExt};
 use serde::Deserialize;
 
 use crate::{
@@ -14,34 +14,52 @@ use crate::{
 
 use super::AIClient;
 
-pub async fn generate_places(
-    client: &AIClient,
-    place_type: &PlaceType,
+pub async fn generate_places<'a>(
+    client: &'a AIClient,
+    place_type: &'a PlaceType,
     max_count: usize,
-) -> Vec<(Place, HashMap<Location, Place>)> {
+) -> impl Stream<Item = (Place, HashMap<Location, Place>)> + 'a {
     tracing::info!("Generating up to {} {}s", max_count, place_type.name);
 
-    let mut places = Vec::new();
-    loop {
-        let place_ideas = generate_place_list(client, &place_type.name)
-            .await
-            .unwrap_or_default()
-            .into_iter()
-            .take(max_count - places.len());
-
-        for place_idea in place_ideas {
-            match generate_place(client, place_type, &place_idea).await {
-                Ok(p) => places.push(p),
-                Err(e) => tracing::error!("Couldn't generate {}: {}", place_idea.0, e),
+    let idea_stream = stream::unfold(
+        (max_count, Vec::new()),
+        move |(remaining_count, mut place_ideas): (usize, Vec<(String, String)>)| async move {
+            if remaining_count == 0 {
+                return None;
             }
-        }
 
-        if places.len() >= max_count {
-            break;
-        }
-    }
+            let remaining_ungenerated = remaining_count.saturating_sub(place_ideas.len());
 
-    places
+            while place_ideas.is_empty() && remaining_ungenerated > 0 {
+                let places = generate_place_list(client, &place_type.name, remaining_ungenerated)
+                    .await
+                    .unwrap_or_default()
+                    .into_iter()
+                    .take(remaining_ungenerated);
+
+                place_ideas.extend(places);
+            }
+
+            place_ideas
+                .pop()
+                .map(|i| (i, (remaining_count.saturating_sub(1), place_ideas)))
+        },
+    );
+
+    let place_stream = idea_stream
+        .map(move |place_idea| async move {
+            let mut place = generate_place(client, place_type, &place_idea).await;
+            while let Err(e) = place {
+                tracing::error!("Failed to generate place: {e}");
+                place = generate_place(client, place_type, &place_idea).await;
+            }
+
+            place.unwrap()
+        })
+        // Generate a few at once
+        .buffered(3);
+
+    place_stream
 }
 
 async fn generate_place(
@@ -50,7 +68,10 @@ async fn generate_place(
     place_idea: &(String, String),
 ) -> Result<(Place, HashMap<Location, Place>)> {
     let rooms = generate_rooms(client, place_type, &place_idea).await?;
-    let mut overworld_place = Place::new(format!("Overworld - {}", place_idea.0), place_idea.1.to_owned());
+    let mut overworld_place = Place::new(
+        format!("Overworld - {}", place_idea.0),
+        place_idea.1.to_owned(),
+    );
     let (entrance, mut rooms) = link_rooms(client, place_type, &place_idea.0, rooms).await?;
 
     overworld_place.add_connection(Direction::Down, entrance)?;
@@ -66,11 +87,16 @@ async fn generate_place(
 #[template(path = "place_list.md")]
 struct CompletionTemplate<'a> {
     place_type: &'a str,
+    count: usize,
 }
 
-async fn generate_place_list(client: &AIClient, place_type: &str) -> Result<Vec<(String, String)>> {
+async fn generate_place_list(
+    client: &AIClient,
+    place_type: &str,
+    count: usize,
+) -> Result<Vec<(String, String)>> {
     let res = client
-        .generate_with_tone(CompletionTemplate { place_type }.to_string())
+        .generate_with_tone(CompletionTemplate { place_type, count }.to_string())
         .await?;
 
     Ok(extract_md_kv_list(&res))

@@ -105,9 +105,7 @@ pub fn get_close_commands<'a>(input: &str, commands: &'a Vec<Command>) -> String
 fn incorperate_generation(engine: &mut Engine) {
     while let Some(r) = engine.gen_handle.get_responses() {
         match r {
-            GenerationRes::Place(places) => places
-                .into_iter()
-                .for_each(|(place, rooms)| add_new_locale(engine, place, rooms)),
+            GenerationRes::Place(place, rooms) => add_new_locale(engine, place, rooms),
         }
     }
 }

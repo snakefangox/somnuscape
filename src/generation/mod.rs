@@ -1,10 +1,14 @@
 mod bestiary;
 mod place;
 
-use std::{collections::HashMap, hash::{Hash, Hasher}};
+use std::{
+    collections::HashMap,
+    hash::{Hash, Hasher},
+};
 
 use anyhow::Result;
 use crossbeam::channel::{Receiver, Sender, TryRecvError};
+use futures::StreamExt;
 use ollama_rs::{
     generation::{completion::request::GenerationRequest, options::GenerationOptions},
     Ollama,
@@ -15,7 +19,10 @@ use regex::Regex;
 use serde::de::DeserializeOwned;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use crate::{config, mud::world::{Location, Place}};
+use crate::{
+    config,
+    mud::world::{Location, Place},
+};
 
 pub use place::{DUNGEON_PLACE_TYPE, VILLAGE_PLACE_TYPE};
 
@@ -39,7 +46,7 @@ pub enum GenerationReq {
 
 #[derive(Debug)]
 pub enum GenerationRes {
-    Place(Vec<(Place, HashMap<Location, Place>)>),
+    Place(Place, HashMap<Location, Place>),
 }
 
 impl Generator {
@@ -60,22 +67,30 @@ impl Generator {
         )
     }
 
-    pub async fn run(&mut self) {
+    pub async fn run(mut self) {
         loop {
             let req = self
                 .request_queue
                 .recv()
                 .await
                 .expect("Gen request channel shouldn't close");
-            let res = match req {
-                GenerationReq::Places(place_type, count) => GenerationRes::Place(
-                    place::generate_places(&self.client, &place_type, count).await,
-                ),
-            };
+            match req {
+                GenerationReq::Places(place_type, count) => {
+                    let client = self.client.clone();
+                    let response_queue = self.response_queue.clone();
 
-            self.response_queue
-                .send(res)
-                .expect("Gen response channel shouldn't close");
+                    tokio::spawn(async move {
+                        place::generate_places(&client, &place_type, count)
+                            .await
+                            .for_each_concurrent(3, |(place, places)| async {
+                                response_queue
+                                    .send(GenerationRes::Place(place, places))
+                                    .expect("Gen response channel shouldn't close");
+                            })
+                            .await;
+                    })
+                }
+            };
         }
     }
 }
@@ -199,6 +214,7 @@ fn extract_yaml<T: DeserializeOwned + Send>(res: &str) -> Result<T> {
 #[cfg(test)]
 mod test {
     use bestiary::CreatureTemplate;
+    use futures::StreamExt;
 
     use super::*;
 
@@ -216,5 +232,21 @@ mod test {
         let lich = CreatureTemplate::stat_new(&client, "lich").await.unwrap();
         assert!(lich.attributes.intelligence > lich.attributes.strength);
         assert!(lich.attributes.willpower > lich.attributes.toughness);
+    }
+
+    #[tokio::test]
+    #[ignore = "ai"]
+    async fn generate_places() {
+        let client = AIClient::default();
+
+        let places: Vec<(Place, HashMap<Location, Place>)> =
+            place::generate_places(&client, &DUNGEON_PLACE_TYPE, 3)
+                .await
+                .collect()
+                .await;
+
+        println!("{places:?}");
+
+        assert_eq!(places.len(), 3)
     }
 }
