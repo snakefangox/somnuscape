@@ -1,16 +1,32 @@
-use std::{path::PathBuf, sync::Arc};
+use core::fmt;
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
-use serde::{Deserialize, Serialize};
+use serde::{
+    de::{self, Visitor},
+    Deserialize, Deserializer, Serialize, Serializer,
+};
 use tokio::sync::{RwLock, RwLockReadGuard};
+
+use crate::PlayerAccount;
 
 pub const STATE_DIR: &str = "somnustate/";
 
-/// A storage mechanism for global data that can be set but never changed,
-/// Like player account info
-#[derive(Debug, Clone)]
-pub struct Registry<T>(Arc<RwLock<Vec<T>>>, PathBuf);
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(transparent)]
+pub struct PlayerId(
+    #[serde(
+        serialize_with = "serialize_u128_hex",
+        deserialize_with = "deserialize_u128_hex"
+    )]
+    u128,
+);
 
-impl<T: for<'a> Deserialize<'a> + Serialize> Registry<T> {
+/// Keeps track of player accounts, linking a username and password
+/// to an easily copied ID.
+#[derive(Debug, Clone)]
+pub struct AccountStorage(Arc<RwLock<HashMap<PlayerId, PlayerAccount>>>, PathBuf);
+
+impl AccountStorage {
     pub async fn load_or_new(filename: &str) -> anyhow::Result<Self> {
         let path = make_save_path(filename);
 
@@ -21,30 +37,65 @@ impl<T: for<'a> Deserialize<'a> + Serialize> Registry<T> {
             if let Some(dir) = path.parent() {
                 tokio::fs::create_dir_all(dir).await?;
             }
-            Vec::new()
+
+            HashMap::new()
         };
 
-        Ok(Registry(RwLock::new(values).into(), path))
+        Ok(AccountStorage(RwLock::new(values).into(), path))
     }
 
-    pub async fn add_user(&self, player: T) -> anyhow::Result<usize> {
+    pub async fn register_user(&self, player: PlayerAccount) -> anyhow::Result<PlayerId> {
         let mut write = self.0.write().await;
-        let id = write.len();
-        write.push(player);
+        let id = PlayerId(rand::random());
+        write.insert(id, player);
 
-        let yaml = serde_yaml::to_string::<Vec<T>>(write.as_ref())?;
+        let yaml = serde_yaml::to_string::<HashMap<PlayerId, PlayerAccount>>(&write)?;
         tokio::fs::write(&self.1, yaml).await?;
 
         Ok(id)
     }
 
-    pub async fn read(&self) -> RwLockReadGuard<Vec<T>> {
+    pub async fn read(&self) -> RwLockReadGuard<HashMap<PlayerId, PlayerAccount>> {
         self.0.read().await
     }
 
-    pub fn blocking_read(&self) -> RwLockReadGuard<Vec<T>> {
+    pub fn blocking_read(&self) -> RwLockReadGuard<HashMap<PlayerId, PlayerAccount>> {
         self.0.blocking_read()
     }
+}
+
+/// We use u128 for some IDs, we save them as a hex string which
+/// is a little less efficient but looks much better.
+struct HexIdVisitor;
+
+impl<'de> Visitor<'de> for HexIdVisitor {
+    type Value = u128;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("A hex string representing a u128 integer")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(u128::from_str_radix(v, 16)
+            .map_err(|e| E::custom(format!("could not parse hex string: {e}")))?)
+    }
+}
+
+pub fn serialize_u128_hex<S>(v: &u128, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_str(&format!("{v:x}"))
+}
+
+pub fn deserialize_u128_hex<'de, D>(deserializer: D) -> Result<u128, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    deserializer.deserialize_str(HexIdVisitor)
 }
 
 pub fn make_save_path(filename: &str) -> PathBuf {

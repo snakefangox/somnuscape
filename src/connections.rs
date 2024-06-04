@@ -5,6 +5,7 @@ use crossbeam::channel::Sender;
 use tokio::sync::mpsc::UnboundedReceiver as TokioReceiver;
 use tokio::sync::mpsc::UnboundedSender as TokioSender;
 
+use crate::state::PlayerId;
 use crate::AppErrors;
 
 pub type MudMessage = String;
@@ -12,7 +13,7 @@ pub type MudMessage = String;
 /// The connection object the engine holds to talk to the player
 #[derive(Debug, Clone)]
 pub struct PlayerConnection(
-    pub usize,
+    pub PlayerId,
     pub Receiver<MudMessage>,
     pub TokioSender<MudMessage>,
 );
@@ -25,7 +26,7 @@ impl PlayerConnection {
 
 /// The connection object the player task holds to talk to the engine
 #[derive(Debug)]
-pub struct EngineConnection(usize, TokioReceiver<MudMessage>, Sender<MudMessage>);
+pub struct EngineConnection(PlayerId, TokioReceiver<MudMessage>, Sender<MudMessage>);
 
 impl EngineConnection {
     pub fn send(&mut self, msg: MudMessage) -> anyhow::Result<()> {
@@ -44,7 +45,7 @@ impl EngineConnection {
 
 pub enum PlayerConnectMsg {
     Connect(PlayerConnection),
-    Disconnect(usize),
+    Disconnect(PlayerId),
 }
 
 #[derive(Debug, Clone)]
@@ -56,7 +57,7 @@ impl PlayerConnectionBroker {
         (PlayerConnectionBroker(s), EngineConnectionBroker::new(r))
     }
 
-    pub fn setup_connection(&self, player_id: usize) -> EngineConnection {
+    pub fn setup_connection(&self, player_id: PlayerId) -> EngineConnection {
         let (s_engine, r_engine) = crossbeam::channel::unbounded();
         let (s_player, r_player) = tokio::sync::mpsc::unbounded_channel();
         self.0
@@ -67,7 +68,7 @@ impl PlayerConnectionBroker {
         EngineConnection(player_id, r_player, s_engine)
     }
 
-    pub fn end_connection(&self, player_id: usize) {
+    pub fn end_connection(&self, player_id: PlayerId) {
         self.0
             .send(PlayerConnectMsg::Disconnect(player_id))
             .expect("Disconnect message send to engine shouldn't error");
@@ -77,7 +78,7 @@ impl PlayerConnectionBroker {
 #[derive(Debug, Clone)]
 pub struct EngineConnectionBroker {
     incoming_connections: Receiver<PlayerConnectMsg>,
-    player_connections: HashMap<usize, PlayerConnection>,
+    player_connections: HashMap<PlayerId, PlayerConnection>,
 }
 
 impl EngineConnectionBroker {
@@ -101,7 +102,7 @@ impl EngineConnectionBroker {
         }
     }
 
-    pub fn poll_player_messages(&mut self) -> Option<(usize, MudMessage)> {
+    pub fn poll_player_messages(&mut self) -> Option<(PlayerId, MudMessage)> {
         for player_connection in self.player_connections.values_mut() {
             if let Ok(msg) = player_connection.poll() {
                 return Some((player_connection.0, msg));
@@ -111,7 +112,7 @@ impl EngineConnectionBroker {
         None
     }
 
-    pub fn send_player_message(&mut self, player: usize, msg: MudMessage) {
+    pub fn send_player_message(&mut self, player: PlayerId, msg: MudMessage) {
         if let Some(player_connection) = self.player_connections.get(&player) {
             if let Err(e) = player_connection.2.send(msg) {
                 tracing::error!("Error sending to player {e}");
@@ -119,7 +120,7 @@ impl EngineConnectionBroker {
         }
     }
 
-    pub fn disconnect_player(&mut self, player: usize) {
+    pub fn disconnect_player(&mut self, player: PlayerId) {
         self.player_connections.remove(&player);
     }
 }

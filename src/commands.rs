@@ -1,8 +1,8 @@
 use std::sync::OnceLock;
 
-use crate::{engine::Engine, mud::world::Direction};
+use crate::{engine::Engine, mud::world::Direction, state::PlayerId};
 
-pub type CmdFn = Box<dyn Fn(&mut Engine, usize, &mut dyn Iterator<Item = &str>) + Send + Sync>;
+pub type CmdFn = Box<dyn Fn(&mut Engine, PlayerId, &mut dyn Iterator<Item = &str>) + Send + Sync>;
 
 pub struct Command {
     pub name: String,
@@ -130,7 +130,7 @@ pub fn quit_command() -> Command {
         Box::new(|engine, player, _| {
             let player_reg = engine.player_registry.blocking_read();
             let name = player_reg
-                .get(player)
+                .get(&player)
                 .map(|p| p.username.as_str())
                 .unwrap_or("");
 

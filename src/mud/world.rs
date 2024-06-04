@@ -1,12 +1,12 @@
 use core::fmt;
-use std::{collections::{HashMap, HashSet}, fmt::{Debug, Display}};
-
-use serde::{
-    de::{self, Visitor},
-    Deserialize, Deserializer, Serialize, Serializer,
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::{Debug, Display},
 };
 
-use crate::{state, AppErrors};
+use serde::{Deserialize, Serialize};
+
+use crate::{state::{self, PlayerId}, AppErrors};
 
 use super::character::Character;
 
@@ -15,7 +15,7 @@ use super::character::Character;
 pub struct World {
     pub places: HashMap<Location, Place>,
     pub overworld_locales: Vec<Location>,
-    pub player_characters: HashMap<usize, Character>,
+    pub player_characters: HashMap<PlayerId, Character>,
     pub current_tick: u64,
 }
 
@@ -137,8 +137,15 @@ impl Place {
 
 /// A unique key for each Place. It's default state is invalid,
 /// to get a valid new Location call `new_location`.
-#[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub struct Location(u128);
+#[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash)]
+#[serde(transparent)]
+pub struct Location(
+    #[serde(
+        serialize_with = "state::serialize_u128_hex",
+        deserialize_with = "state::deserialize_u128_hex"
+    )]
+    u128,
+);
 
 impl Location {
     /// Generate a new location, ensuring we'll never get 0 which we
@@ -159,45 +166,6 @@ impl Display for Location {
 impl Debug for Location {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         Display::fmt(&self, f)
-    }
-}
-
-/// We serialize `Location` as a hex string which is less efficient but looks much better
-struct LocationVisitor;
-
-impl<'de> Visitor<'de> for LocationVisitor {
-    type Value = Location;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("A hex string representing a u128 integer")
-    }
-
-    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
-        Ok(Location(u128::from_str_radix(v, 16).map_err(|e| {
-            E::custom(format!("could not parse hex string: {e}"))
-        })?))
-    }
-}
-
-impl Serialize for Location {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let location = self.0;
-        serializer.serialize_str(&format!("{location:x}"))
-    }
-}
-
-impl<'de> Deserialize<'de> for Location {
-    fn deserialize<D>(deserializer: D) -> Result<Location, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserializer.deserialize_str(LocationVisitor)
     }
 }
 

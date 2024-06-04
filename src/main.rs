@@ -1,5 +1,4 @@
 mod commands;
-mod config;
 mod connections;
 mod engine;
 mod generation;
@@ -17,7 +16,7 @@ use generation::Generator;
 use mud::world::Location;
 use nectar::{event::TelnetEvent, TelnetCodec};
 use serde::{Deserialize, Serialize};
-use state::Registry;
+use state::{AccountStorage, PlayerId};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::Framed;
 
@@ -25,8 +24,8 @@ use tokio_util::codec::Framed;
 async fn main() -> Result<()> {
     console_subscriber::init();
 
-    let players: Registry<PlayerEntry> = Registry::load_or_new("player-registry.yaml").await?;
-    let (mut gen, gen_handle) = Generator::new();
+    let players = AccountStorage::load_or_new("player-registry.yaml").await?;
+    let (gen, gen_handle) = Generator::new();
     tokio::spawn(async move {
         gen.run().await;
     });
@@ -54,7 +53,7 @@ async fn main() -> Result<()> {
                     if e.is::<AppErrors>() {
                         if let Ok(AppErrors::PlayerDisconnected(id)) = e.downcast::<AppErrors>() {
                             let pr = players.read().await;
-                            let n = pr.get(id).map(|p| p.username.as_str()).unwrap_or_default();
+                            let n = pr.get(&id).map(|p| p.username.as_str()).unwrap_or_default();
                             tracing::info!("Player disconnected: {n}");
                         }
                     } else {
@@ -72,7 +71,7 @@ async fn main() -> Result<()> {
 
 async fn handler(
     stream: TcpStream,
-    player_registry: Registry<PlayerEntry>,
+    player_registry: AccountStorage,
     broker: PlayerConnectionBroker,
     connection_state: &mut ConnectionState,
 ) -> Result<()> {
@@ -110,7 +109,7 @@ async fn handler(
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PlayerEntry {
+pub struct PlayerAccount {
     pub username: String,
     pub password: u64,
 }
@@ -120,15 +119,15 @@ pub enum ConnectionState {
     #[default]
     Unauthorized,
     NewUser(String),
-    Login(usize),
-    Authorized(usize, EngineConnection),
+    Login(PlayerId),
+    Authorized(PlayerId, EngineConnection),
 }
 
 impl ConnectionState {
     async fn handle_login(
         &mut self,
         msg: String,
-        player_registry: &Registry<PlayerEntry>,
+        player_registry: &AccountStorage,
         broker: &PlayerConnectionBroker,
     ) -> Result<String> {
         match self {
@@ -137,11 +136,10 @@ impl ConnectionState {
                 let read = player_registry.read().await;
                 let player = read
                     .iter()
-                    .enumerate()
                     .find(|(_, p)| p.username.to_lowercase() == username.to_lowercase());
 
-                if let Some((idx, player)) = player {
-                    *self = ConnectionState::Login(idx);
+                if let Some((id, player)) = player {
+                    *self = ConnectionState::Login(*id);
                     Ok(format!(
                         "Welcome back {}!\r\nPlease enter your password:",
                         player.username
@@ -156,10 +154,10 @@ impl ConnectionState {
             ConnectionState::NewUser(username) => {
                 let username = username.clone();
                 let password = seahash::hash(msg.as_bytes());
-                let player = PlayerEntry { username, password };
+                let player = PlayerAccount { username, password };
 
                 tracing::info!("Player {} registered an account", player.username);
-                let id = player_registry.add_user(player).await?;
+                let id = player_registry.register_user(player).await?;
 
                 *self = Self::Authorized(id, broker.setup_connection(id));
 
@@ -169,7 +167,7 @@ impl ConnectionState {
                 let player_id = *player_id;
                 let password = seahash::hash(msg.as_bytes());
                 let read = player_registry.read().await;
-                let player = &read[player_id];
+                let player = &read[&player_id];
 
                 if password == player.password {
                     *self =
@@ -190,7 +188,7 @@ impl ConnectionState {
         }
     }
 
-    pub fn get_player_id(&self) -> Option<usize> {
+    pub fn get_player_id(&self) -> Option<PlayerId> {
         match self {
             ConnectionState::Unauthorized => None,
             ConnectionState::NewUser(_) => None,
@@ -202,7 +200,7 @@ impl ConnectionState {
 
 #[derive(Debug, PartialEq)]
 pub enum AppErrors {
-    PlayerDisconnected(usize),
+    PlayerDisconnected(PlayerId),
     TooManyConnections(Location),
     AIStructureError,
 }
@@ -231,5 +229,58 @@ mod filters {
             s.push_str("s");
             Ok(s)
         }
+    }
+}
+
+mod config {
+    use std::{path::PathBuf, sync::OnceLock};
+
+    use serde::Deserialize;
+
+    #[derive(Debug, Deserialize)]
+    #[serde(default, rename_all = "kebab-case")]
+    pub struct SomnuscapeConfig {
+        pub server_address: String,
+        pub save_every_x_ticks: u64,
+        pub ticks_per_second: f64,
+        pub model_temperature: f32,
+        pub tone_words: Vec<String>,
+        pub tone_words_per_generation: usize,
+    }
+
+    impl Default for SomnuscapeConfig {
+        fn default() -> Self {
+            Self {
+                server_address: "0.0.0.0:5000".into(),
+                model_temperature: 0.9,
+                tone_words: vec![
+                    "mystical".into(),
+                    "ancient".into(),
+                    "dark".into(),
+                    "light".into(),
+                    "gothic".into(),
+                    "sacrosanct".into(),
+                ],
+                tone_words_per_generation: 2,
+                save_every_x_ticks: 200,
+                ticks_per_second: 20.0,
+            }
+        }
+    }
+
+    pub fn get() -> &'static SomnuscapeConfig {
+        static CONFIG: OnceLock<SomnuscapeConfig> = OnceLock::new();
+
+        CONFIG.get_or_init(|| {
+            let p: PathBuf = "config.yaml".into();
+            if p.try_exists().unwrap_or_default() {
+                std::fs::read_to_string(p)
+                    .and_then(|y| Ok(serde_yaml::from_str(&y)))
+                    .expect("Could not read config")
+                    .expect("Could not deserialize config")
+            } else {
+                SomnuscapeConfig::default()
+            }
+        })
     }
 }

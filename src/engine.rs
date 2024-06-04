@@ -6,20 +6,20 @@ use crate::{
     connections::{EngineConnectionBroker, PlayerConnectionBroker},
     generation::{GenerationReq, GenerationRes, GeneratorHandle},
     mud::world::{Direction, Location, Place, World},
-    PlayerEntry, Registry,
+    AccountStorage,
 };
 
 /// All the engine state kept between ticks, including world info
 pub struct Engine {
     pub connection_broker: EngineConnectionBroker,
-    pub player_registry: Registry<PlayerEntry>,
+    pub player_registry: AccountStorage,
     pub gen_handle: GeneratorHandle,
     pub world: World,
 }
 
 impl Engine {
     pub fn start_engine(
-        player_registry: Registry<PlayerEntry>,
+        player_registry: AccountStorage,
         gen_handle: GeneratorHandle,
     ) -> PlayerConnectionBroker {
         let (player_connection_broker, connection_broker) = PlayerConnectionBroker::new();
